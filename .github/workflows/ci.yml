@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite, pdo_pgsql, mbstring, bcmath, intl, sockets
+          coverage: none
+
+      - name: Instalar dependencias
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Pint (estilo)
+        run: vendor/bin/pint --test
+
+      - name: PHPUnit
+        run: php artisan test
+
+      # Guardas estructurales — greps de la regla que de verdad importa,
+      # no aserciones frágiles sobre el número de ficheros.
+      - name: app/ no contiene lógica de negocio
+        run: |
+          if grep -rlE 'class .*(Handler|Command|Query)\b' app/ ; then
+            echo "::error::app/ debe ser un shim delgado. Los handlers viven en src/."
+            exit 1
+          fi
+
+      # La pureza del dominio la enforza tests/Unit/ArchitectureTest.php, que
+      # además falla si no encuentra nada que escanear. Aquí sólo se comprueba
+      # que ese test sigue existiendo: un grep con `[ -d ]` pasaba en verde
+      # cuando el directorio no existía, que es verde por no mirar.
+      - name: La guarda de arquitectura existe
+        run: test -f tests/Unit/ArchitectureTest.php

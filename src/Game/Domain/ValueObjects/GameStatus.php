@@ -1,0 +1,45 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Src\Game\Domain\ValueObjects;
+
+/**
+ * A game's status, owned by the game framework (not by the RuleSet).
+ *
+ * A final class of constants and not a PHP enum: `enum-persistence` convention.
+ * It is stored as VARCHAR and validated in the application, which keeps Postgres
+ * and SQLite interchangeable in the tests.
+ *
+ * Not to be confused with `stage`, which is an **opaque string owned by the
+ * RuleSet**. The frontend never branches on a stage: it paints its label.
+ */
+final class GameStatus
+{
+    /** People joining; play has not started yet. */
+    public const LOBBY = 'lobby';
+
+    /** In play. */
+    public const RUNNING = 'running';
+
+    /** Finished as the rules dictate. */
+    public const FINISHED = 'finished';
+
+    /** Expired through inactivity, or abandoned. */
+    public const ABANDONED = 'abandoned';
+
+    public const ALL = [self::LOBBY, self::RUNNING, self::FINISHED, self::ABANDONED];
+
+    private const TERMINAL = [self::FINISHED, self::ABANDONED];
+
+    public static function isValid(string $status): bool
+    {
+        return in_array($status, self::ALL, true);
+    }
+
+    /** A terminal status closes the channel and releases the game's code. */
+    public static function isTerminal(string $status): bool
+    {
+        return in_array($status, self::TERMINAL, true);
+    }
+}
