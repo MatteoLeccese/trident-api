@@ -29,7 +29,7 @@ final class SeatNumber implements JsonSerializable
     public static function fromInt(int $value): self
     {
         if ($value < 1) {
-            throw new InvalidArgumentException("El asiento debe ser 1 o mayor, recibido {$value}.");
+            throw new InvalidArgumentException("The seat must be 1 or higher, got {$value}.");
         }
 
         return new self($value);

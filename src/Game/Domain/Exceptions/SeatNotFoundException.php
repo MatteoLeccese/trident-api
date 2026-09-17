@@ -8,7 +8,7 @@ use Src\Shared\Domain\Exceptions\DomainException;
 
 final class SeatNotFoundException extends DomainException
 {
-    public function __construct(string $message = 'Ese asiento no existe en esta partida.')
+    public function __construct(string $message = 'That seat is not in this game.')
     {
         parent::__construct($message);
     }

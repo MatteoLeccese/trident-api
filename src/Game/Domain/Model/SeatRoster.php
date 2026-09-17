@@ -37,7 +37,7 @@ final class SeatRoster
 
         if ($count < self::MIN_SEATS || $count > self::MAX_SEATS) {
             throw new RosterSizeException(sprintf(
-                'Una partida necesita entre %d y %d jugadores, y se han enviado %d.',
+                'A game needs between %d and %d players, but %d were sent.',
                 self::MIN_SEATS,
                 self::MAX_SEATS,
                 $count,
@@ -84,7 +84,7 @@ final class SeatRoster
             }
         }
 
-        throw new SeatNotFoundException("El asiento {$number->value()} no existe en esta partida.");
+        throw new SeatNotFoundException("Seat {$number->value()} is not in this game.");
     }
 
     public function has(SeatNumber $number): bool
@@ -101,13 +101,13 @@ final class SeatRoster
     public function rename(SeatNumber $number, Nickname $nickname): self
     {
         if (! $this->has($number)) {
-            throw new SeatNotFoundException("El asiento {$number->value()} no existe en esta partida.");
+            throw new SeatNotFoundException("Seat {$number->value()} is not in this game.");
         }
 
         foreach ($this->seats as $seat) {
             // Renaming yourself (changing capitalisation) is not a clash.
             if (! $seat->number()->equals($number) && $seat->nickname()->equals($nickname)) {
-                throw new NicknameTakenException("El nombre '{$nickname->value()}' ya está en uso en esta partida.");
+                throw new NicknameTakenException("The name '{$nickname->value()}' is already taken in this game.");
             }
         }
 
@@ -139,7 +139,7 @@ final class SeatRoster
             $key = $nickname->comparisonKey();
 
             if (isset($seen[$key])) {
-                throw new NicknameTakenException("El nombre '{$nickname->value()}' está repetido.");
+                throw new NicknameTakenException("The name '{$nickname->value()}' is repeated.");
             }
 
             $seen[$key] = true;

@@ -53,12 +53,12 @@ final class NicknameTest extends TestCase
     public static function invalidNicknames(): array
     {
         return [
-            'vacío' => [''],
-            'sólo espacios' => ['   '],
-            'una letra' => ['A'],
-            'demasiado largo' => [str_repeat('a', 25)],
-            'con salto de línea' => ["Ana\nMari"],
-            'con tabulador' => ["Ana\tMari"],
+            'empty' => [''],
+            'only spaces' => ['   '],
+            'a single letter' => ['A'],
+            'too long' => [str_repeat('a', 25)],
+            'with a line break' => ["Ana\nMari"],
+            'with a tab' => ["Ana\tMari"],
         ];
     }
 

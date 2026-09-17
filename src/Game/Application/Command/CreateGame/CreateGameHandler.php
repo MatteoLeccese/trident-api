@@ -61,6 +61,6 @@ final class CreateGameHandler
 
         // 32^6 combinations and codes are released when a game ends: reaching here
         // means something is very wrong, not that we were unlucky.
-        throw new RuntimeException('No se pudo generar un código de partida libre.');
+        throw new RuntimeException('Could not find a free game code.');
     }
 }

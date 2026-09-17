@@ -8,7 +8,7 @@ use Src\Shared\Domain\Exceptions\DomainException;
 
 final class RosterSizeException extends DomainException
 {
-    public function __construct(string $message = 'El número de jugadores no es válido.')
+    public function __construct(string $message = 'That is not a valid number of players.')
     {
         parent::__construct($message);
     }

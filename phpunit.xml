@@ -20,6 +20,16 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- The suite must not depend on a developer's local .env: it has to run
+             identically on a laptop, in CI and inside the container. These are
+             throwaway values, meaningful only to the tests. -->
+        <env name="APP_KEY" value="base64:Kx8yZ0mGr0dJ3vQ1s7T2bN4uW6xY8aC0eF2gH4jK6mQ="/>
+        <env name="REVERB_APP_ID" value="trident-test"/>
+        <env name="REVERB_APP_KEY" value="trident-test-key"/>
+        <env name="REVERB_APP_SECRET" value="trident-test-secret"/>
+        <env name="REVERB_HOST" value="127.0.0.1"/>
+        <env name="REVERB_PORT" value="8080"/>
+        <env name="REVERB_SCHEME" value="http"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

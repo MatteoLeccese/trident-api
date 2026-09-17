@@ -96,7 +96,7 @@ final class MigrationPortabilityTest extends TestCase
     {
         $sql = $this->compile($migration, $this->postgres());
 
-        $this->assertNotEmpty($sql, "{$migration} no produjo SQL en Postgres.");
+        $this->assertNotEmpty($sql, "{$migration} produced no SQL on Postgres.");
     }
 
     #[DataProvider('migrations')]
@@ -104,7 +104,7 @@ final class MigrationPortabilityTest extends TestCase
     {
         $sql = $this->compile($migration, $this->sqlite());
 
-        $this->assertNotEmpty($sql, "{$migration} no produjo SQL en SQLite.");
+        $this->assertNotEmpty($sql, "{$migration} produced no SQL on SQLite.");
     }
 
     public function test_the_token_hash_is_varchar_and_never_blank_padded_char(): void

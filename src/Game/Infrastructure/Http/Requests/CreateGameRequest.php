@@ -30,10 +30,10 @@ final class CreateGameRequest extends ApiFormRequest
         // Inherited from the old StoreGameRequest: the only user-facing copy the
         // backend ever had.
         return [
-            'nicknames.required' => 'Hace falta la lista de jugadores.',
-            'nicknames.array' => 'La lista de jugadores debe ser una lista.',
-            'nicknames.*.required' => 'Hay un jugador sin nombre.',
-            'nicknames.*.string' => 'El nombre de un jugador debe ser texto.',
+            'nicknames.required' => 'The list of players is missing.',
+            'nicknames.array' => 'The list of players must be a list.',
+            'nicknames.*.required' => 'One of the players has no name.',
+            'nicknames.*.string' => 'A player name must be text.',
         ];
     }
 

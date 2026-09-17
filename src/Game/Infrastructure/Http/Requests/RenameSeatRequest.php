@@ -25,8 +25,8 @@ final class RenameSeatRequest extends ApiFormRequest
     public function messages(): array
     {
         return [
-            'nickname.required' => 'Hace falta un nombre.',
-            'nickname.string' => 'El nombre debe ser texto.',
+            'nickname.required' => 'A name is missing.',
+            'nickname.string' => 'The name must be text.',
         ];
     }
 

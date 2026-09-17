@@ -100,7 +100,7 @@ final class RenameSeatHandlerTest extends TestCase
     {
         $this->expectException(GameNotFoundException::class);
 
-        $this->rename(1, 'Zoe', 'no-es-un-uuid');
+        $this->rename(1, 'Zoe', 'not-a-uuid');
     }
 
     public function test_an_empty_seat_is_rejected(): void

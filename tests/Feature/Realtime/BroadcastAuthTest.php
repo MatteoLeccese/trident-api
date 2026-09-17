@@ -130,7 +130,7 @@ final class BroadcastAuthTest extends TestCase
 
     public function test_a_malformed_token_does_not_explode(): void
     {
-        $this->authorise($this->channel(), ['X-Trident-Controller-Token' => 'basura'])->assertOk();
+        $this->authorise($this->channel(), ['X-Trident-Controller-Token' => 'garbage'])->assertOk();
     }
 
     public function test_a_game_that_does_not_exist_is_refused(): void
@@ -149,7 +149,7 @@ final class BroadcastAuthTest extends TestCase
 
     public function test_a_channel_whose_id_is_not_a_game_is_refused(): void
     {
-        $this->authorise('presence-game.no-es-un-uuid')->assertForbidden();
+        $this->authorise('presence-game.not-a-uuid')->assertForbidden();
     }
 
     public function test_the_participant_id_travels_inside_the_payload(): void

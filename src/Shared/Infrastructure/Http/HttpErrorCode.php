@@ -34,20 +34,20 @@ final class HttpErrorCode
     ];
 
     private const MESSAGES = [
-        400 => 'La petición no es válida.',
-        401 => 'Autenticación requerida.',
-        403 => 'No tienes permiso para hacer eso.',
-        404 => 'No se encontró el recurso solicitado.',
-        405 => 'Ese método no está permitido en esta ruta.',
-        406 => 'No podemos responder en el formato pedido.',
-        409 => 'La operación entra en conflicto con el estado actual.',
-        410 => 'Eso ya no existe.',
-        413 => 'La petición es demasiado grande.',
-        415 => 'Formato de contenido no soportado.',
-        419 => 'La sesión ha caducado.',
-        422 => 'Los datos enviados no son válidos.',
-        429 => 'Demasiadas peticiones. Prueba en un momento.',
-        503 => 'El servicio no está disponible ahora mismo.',
+        400 => 'That request is not valid.',
+        401 => 'Authentication required.',
+        403 => 'You do not have permission to do that.',
+        404 => 'We could not find what you asked for.',
+        405 => 'That method is not allowed on this route.',
+        406 => 'We cannot answer in the format you asked for.',
+        409 => 'That clashes with the current state.',
+        410 => 'That no longer exists.',
+        413 => 'That request is too large.',
+        415 => 'That content format is not supported.',
+        419 => 'The session has expired.',
+        422 => 'The data you sent is not valid.',
+        429 => 'Too many requests. Try again in a moment.',
+        503 => 'The service is not available right now.',
     ];
 
     public static function forStatus(int $status): string
@@ -70,7 +70,7 @@ final class HttpErrorCode
         }
 
         return $status >= 500
-            ? 'Ha ocurrido un error inesperado.'
-            : 'No hemos podido procesar la petición.';
+            ? 'Something went wrong.'
+            : 'We could not process that request.';
     }
 }

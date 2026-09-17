@@ -35,7 +35,7 @@ final class GameController extends Controller
             // The BFF stores it in an httpOnly cookie and strips it from here before
             // the response reaches the browser.
             'controller_token' => $created->controllerToken->value(),
-        ], 'Partida creada.');
+        ], 'Game created.');
     }
 
     public function show(string $gameId): JsonResponse
@@ -56,7 +56,7 @@ final class GameController extends Controller
     {
         return ApiResponse::success(
             $this->commands->dispatch($request->toCommand($gameId, $seat))->toArray(),
-            'Asiento renombrado.',
+            'Seat renamed.',
         );
     }
 }

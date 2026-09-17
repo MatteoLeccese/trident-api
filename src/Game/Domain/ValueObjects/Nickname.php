@@ -32,7 +32,7 @@ final class Nickname implements JsonSerializable, Stringable
         // Control characters are rejected before normalising: a line break inside
         // a name breaks any layout and is not an oversight.
         if (preg_match('/[\p{C}]/u', $value) === 1) {
-            throw new InvalidArgumentException('El nombre no puede contener caracteres de control.');
+            throw new InvalidArgumentException('The name cannot contain control characters.');
         }
 
         // Repeated spaces collapse: two names that look the same on a television
@@ -42,7 +42,7 @@ final class Nickname implements JsonSerializable, Stringable
 
         if ($length < self::MIN_LENGTH || $length > self::MAX_LENGTH) {
             throw new InvalidArgumentException(
-                sprintf('El nombre debe tener entre %d y %d caracteres.', self::MIN_LENGTH, self::MAX_LENGTH),
+                sprintf('The name must be between %d and %d characters.', self::MIN_LENGTH, self::MAX_LENGTH),
             );
         }
 

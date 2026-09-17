@@ -67,7 +67,7 @@ final class ControllerTokenTest extends TestCase
         $token = ControllerToken::generate();
 
         $this->assertFalse($token->matchesHash(''));
-        $this->assertFalse($token->matchesHash('no-es-un-hash'));
+        $this->assertFalse($token->matchesHash('not-a-hash'));
     }
 
     public function test_it_never_leaks_through_string_conversion(): void
@@ -98,6 +98,6 @@ final class ControllerTokenTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        ControllerToken::fromString('corto');
+        ControllerToken::fromString('short');
     }
 }

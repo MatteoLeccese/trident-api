@@ -27,8 +27,8 @@ final class UuidTest extends TestCase
         for ($i = 0; $i < 20; $i++) {
             $value = Uuid::random()->value();
 
-            $this->assertSame('4', $value[14], 'El nibble de versión debe ser 4.');
-            $this->assertContains($value[19], ['8', '9', 'a', 'b'], 'El nibble de variante debe ser RFC 4122.');
+            $this->assertSame('4', $value[14], 'The version nibble must be 4.');
+            $this->assertContains($value[19], ['8', '9', 'a', 'b'], 'The variant nibble must be RFC 4122.');
         }
     }
 
@@ -67,13 +67,13 @@ final class UuidTest extends TestCase
     public static function invalidValues(): array
     {
         return [
-            'vacío' => [''],
-            'no es un uuid' => ['nope'],
-            'sin guiones' => ['0f8fad5bd9cb469fa16570867728950e'],
-            'demasiado corto' => ['0f8fad5b-d9cb-469f-a165-7086772895'],
-            'carácter no hexadecimal' => ['zf8fad5b-d9cb-469f-a165-70867728950e'],
-            'con salto de línea al final' => ["0f8fad5b-d9cb-469f-a165-70867728950e\n"],
-            'con salto de línea y basura' => ["0f8fad5b-d9cb-469f-a165-70867728950e\nDROP TABLE games"],
+            'empty' => [''],
+            'not a uuid' => ['nope'],
+            'without dashes' => ['0f8fad5bd9cb469fa16570867728950e'],
+            'too short' => ['0f8fad5b-d9cb-469f-a165-7086772895'],
+            'non-hexadecimal character' => ['zf8fad5b-d9cb-469f-a165-70867728950e'],
+            'with a trailing newline' => ["0f8fad5b-d9cb-469f-a165-70867728950e\n"],
+            'with a newline and junk' => ["0f8fad5b-d9cb-469f-a165-70867728950e\nDROP TABLE games"],
         ];
     }
 

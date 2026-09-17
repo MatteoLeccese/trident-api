@@ -28,7 +28,7 @@ final class SeatNumberTest extends TestCase
      */
     public static function outsideTheTable(): array
     {
-        return ['cero' => [0], 'negativo' => [-1], 'muy negativo' => [PHP_INT_MIN]];
+        return ['zero' => [0], 'negative' => [-1], 'very negative' => [PHP_INT_MIN]];
     }
 
     #[DataProvider('outsideTheTable')]

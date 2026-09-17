@@ -52,14 +52,14 @@ final class SeatRosterTest extends TestCase
     {
         $this->expectException(RosterSizeException::class);
 
-        $this->roster(array_map(static fn (int $i): string => "Jugador{$i}", range(1, 16)));
+        $this->roster(array_map(static fn (int $i): string => "Player{$i}", range(1, 16)));
     }
 
     public function test_fifteen_is_allowed_and_three_is_allowed(): void
     {
         $this->assertCount(3, $this->roster(['Ana', 'Bea', 'Caro'])->seats());
         $this->assertCount(15, $this->roster(array_map(
-            static fn (int $i): string => "Jugador{$i}",
+            static fn (int $i): string => "Player{$i}",
             range(1, 15),
         ))->seats());
     }

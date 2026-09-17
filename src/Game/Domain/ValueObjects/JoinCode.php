@@ -49,7 +49,7 @@ final class JoinCode implements JsonSerializable, Stringable
         );
 
         if (preg_match('/\A['.self::ALPHABET.']{'.self::LENGTH.'}\z/', $normalised) !== 1) {
-            throw new InvalidArgumentException("'{$value}' no es un código de partida válido.");
+            throw new InvalidArgumentException("'{$value}' is not a valid game code.");
         }
 
         return new self($normalised);

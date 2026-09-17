@@ -159,7 +159,7 @@ final class GameTest extends TestCase
 
         try {
             $game->renameSeat(SeatNumber::fromInt(2), Nickname::fromString('Ana'), FrozenClock::at('2026-09-15 20:45:00'));
-            $this->fail('Se esperaba NicknameTakenException.');
+            $this->fail('Expected a NicknameTakenException.');
         } catch (NicknameTakenException) {
             // expected
         }

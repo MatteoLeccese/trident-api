@@ -24,7 +24,7 @@ final class LaravelCommandBus implements CommandBus
     {
         if (isset($this->handlers[$commandClass])) {
             throw new LogicException(
-                "El comando {$commandClass} ya tiene un handler registrado ({$this->handlers[$commandClass]}).",
+                "The command {$commandClass} already has a handler registered ({$this->handlers[$commandClass]}).",
             );
         }
 
@@ -37,7 +37,7 @@ final class LaravelCommandBus implements CommandBus
 
         if (! isset($this->handlers[$commandClass])) {
             throw new LogicException(
-                "No hay handler registrado para {$commandClass}. Regístralo en DomainServiceProvider.",
+                "No handler is registered for {$commandClass}. Register it in DomainServiceProvider.",
             );
         }
 

@@ -24,7 +24,7 @@ final class LaravelQueryBus implements QueryBus
     {
         if (isset($this->handlers[$queryClass])) {
             throw new LogicException(
-                "La query {$queryClass} ya tiene un handler registrado ({$this->handlers[$queryClass]}).",
+                "The query {$queryClass} already has a handler registered ({$this->handlers[$queryClass]}).",
             );
         }
 
@@ -37,7 +37,7 @@ final class LaravelQueryBus implements QueryBus
 
         if (! isset($this->handlers[$queryClass])) {
             throw new LogicException(
-                "No hay handler registrado para {$queryClass}. Regístralo en DomainServiceProvider.",
+                "No handler is registered for {$queryClass}. Register it in DomainServiceProvider.",
             );
         }
 

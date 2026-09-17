@@ -42,7 +42,7 @@ abstract class DomainException extends RuntimeException
         // \z rather than $: in PCRE, $ also matches just before a trailing newline.
         if (preg_match('/\A[a-z][a-z0-9_]*\z/', $errorCode) !== 1) {
             throw new InvalidArgumentException(
-                "El código de error '{$errorCode}' debe ser snake_case: minúsculas, dígitos y guiones bajos, empezando por letra.",
+                "The error code '{$errorCode}' must be snake_case: lowercase letters, digits and underscores, starting with a letter.",
             );
         }
 

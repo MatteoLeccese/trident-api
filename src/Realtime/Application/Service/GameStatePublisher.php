@@ -36,7 +36,7 @@ final class GameStatePublisher implements StatePublisher
         try {
             $this->events->dispatch(new GameStateChanged($snapshot));
         } catch (Throwable $e) {
-            $this->logger->warning('No se pudo emitir el estado de la partida.', [
+            $this->logger->warning('Could not broadcast the game state.', [
                 'game_id' => $snapshot->gameId()->value(),
                 'version' => $snapshot->version()->value(),
                 'exception' => $e::class,

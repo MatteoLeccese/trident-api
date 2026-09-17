@@ -61,13 +61,13 @@ final class JoinCodeTest extends TestCase
     public static function invalidCodes(): array
     {
         return [
-            'vacío' => [''],
-            'demasiado corto' => ['K7QP3'],
-            'demasiado largo' => ['K7QP3MX'],
-            'con símbolos' => ['K7QP3!'],
-            'con un byte nulo' => ["K7QP3\x00M"],
-            'con un carácter de control' => ["K7QP3\x07M"],
-            'con la U excluida' => ['K7QP3U'],
+            'empty' => [''],
+            'too short' => ['K7QP3'],
+            'too long' => ['K7QP3MX'],
+            'with symbols' => ['K7QP3!'],
+            'with a null byte' => ["K7QP3\x00M"],
+            'with a control character' => ["K7QP3\x07M"],
+            'with the excluded U' => ['K7QP3U'],
         ];
     }
 

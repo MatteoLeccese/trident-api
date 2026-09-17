@@ -24,10 +24,10 @@ final class EnvelopeEnforcementTest extends TestCase
         Route::middleware('api')->prefix('api/v1/__env')->group(function (): void {
             Route::get('/bare-array', fn () => ['seat' => 3]);
             Route::get('/bare-string', fn () => 'ok');
-            Route::get('/already-wrapped', fn () => ApiResponse::success(['seat' => 3], 'Hecho'));
+            Route::get('/already-wrapped', fn () => ApiResponse::success(['seat' => 3], 'Done'));
             Route::get('/nothing', fn () => null);
             Route::get('/no-content', fn () => response()->noContent());
-            Route::get('/business', fn () => throw new BusinessException('not_your_turn', 'No es tu turno.'));
+            Route::get('/business', fn () => throw new BusinessException('not_your_turn', 'It is not your turn.'));
             Route::get('/limited', fn () => ApiResponse::success())->middleware('throttle:2,1');
         });
     }
@@ -59,7 +59,7 @@ final class EnvelopeEnforcementTest extends TestCase
             ->assertOk()
             ->assertExactJson([
                 'status' => 200,
-                'message' => 'Hecho',
+                'message' => 'Done',
                 'error' => null,
                 'data' => ['seat' => 3],
             ]);
@@ -84,7 +84,7 @@ final class EnvelopeEnforcementTest extends TestCase
             $this->assertSame(
                 ['status', 'message', 'error', 'data'],
                 array_keys($this->getJson("/api/v1/__env/{$case}")->json()),
-                "La ruta '{$case}' rompe el sobre.",
+                "The route '{$case}' breaks the envelope.",
             );
         }
     }

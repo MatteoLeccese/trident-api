@@ -23,23 +23,23 @@ final class ExceptionRenderingTest extends TestCase
         parent::setUp();
 
         Route::middleware('api')->prefix('api/v1/__test')->group(function (): void {
-            Route::get('/business', fn () => throw new BusinessException('not_your_turn', 'No es tu turno.'));
+            Route::get('/business', fn () => throw new BusinessException('not_your_turn', 'It is not your turn.'));
             Route::get('/business-with-data', fn () => throw new BusinessException(
                 'game_version_conflict',
-                'Estado obsoleto.',
+                'That state is out of date.',
                 422,
                 ['version' => 47],
             ));
-            Route::get('/business-404', fn () => throw new BusinessException('game_not_found', 'No existe.', 404));
+            Route::get('/business-404', fn () => throw new BusinessException('game_not_found', 'That does not exist.', 404));
             Route::get('/validation', fn () => throw ValidationException::withMessages([
-                'nickname' => ['El nickname ya está en uso.'],
-                'seat' => ['Asiento inválido.'],
+                'nickname' => ['That name is already taken.'],
+                'seat' => ['That seat is not valid.'],
             ]));
             Route::get('/model-missing', fn () => throw new ModelNotFoundException);
             Route::get('/forbidden', fn () => throw new AuthorizationException);
             Route::get('/unauthenticated', fn () => throw new AuthenticationException);
-            Route::get('/boom', fn () => throw new RuntimeException('detalle interno que no debe filtrarse'));
-            Route::get('/abort-409', fn () => abort(409, 'Conflicto crudo de Laravel'));
+            Route::get('/boom', fn () => throw new RuntimeException('internal detail that must not leak'));
+            Route::get('/abort-409', fn () => abort(409, 'Raw Laravel conflict'));
             Route::get('/abort-403', fn () => abort(403));
             Route::get('/abort-503', fn () => abort(503));
             Route::post('/solo-post', fn () => 'ok');
@@ -48,7 +48,7 @@ final class ExceptionRenderingTest extends TestCase
             Route::get('/query-ex', fn () => throw new QueryException(
                 'pgsql',
                 'select * from games where controller_token_hash = ?',
-                ['SENTINELA-SECRETA'],
+                ['SECRET-SENTINEL'],
                 new RuntimeException('SQLSTATE[08006] password authentication failed for user "trident"'),
             ));
         });
@@ -60,7 +60,7 @@ final class ExceptionRenderingTest extends TestCase
             ->assertStatus(422)
             ->assertExactJson([
                 'status' => 422,
-                'message' => 'No es tu turno.',
+                'message' => 'It is not your turn.',
                 'error' => 'not_your_turn',
                 'data' => null,
             ]);
@@ -87,7 +87,7 @@ final class ExceptionRenderingTest extends TestCase
         $this->getJson('/api/v1/__test/validation')
             ->assertStatus(422)
             ->assertJsonPath('error', 'validation_error')
-            ->assertJsonPath('message', 'El nickname ya está en uso.');
+            ->assertJsonPath('message', 'That name is already taken.');
     }
 
     public function test_a_missing_model_is_404_not_found(): void
@@ -132,7 +132,7 @@ final class ExceptionRenderingTest extends TestCase
         $response = $this->getJson('/api/v1/__test/boom')->assertStatus(500);
 
         $response->assertJsonPath('error', 'internal_error');
-        $this->assertStringNotContainsString('detalle interno', $response->getContent());
+        $this->assertStringNotContainsString('internal detail', $response->getContent());
         $this->assertStringNotContainsString('vendor/', $response->getContent());
     }
 
@@ -165,7 +165,7 @@ final class ExceptionRenderingTest extends TestCase
         // abort(409, '...') leaves developer text in the exception.
         $this->getJson('/api/v1/__test/abort-409')
             ->assertStatus(409)
-            ->assertDontSee('Conflicto crudo de Laravel');
+            ->assertDontSee('Raw Laravel conflict');
     }
 
     public function test_the_http_exceptions_laravel_actually_produces_are_covered_directly(): void
@@ -189,7 +189,7 @@ final class ExceptionRenderingTest extends TestCase
         $response = $this->getJson('/api/v1/__test/query-ex')->assertStatus(500);
 
         $response->assertJsonPath('error', 'database_error');
-        $this->assertStringNotContainsString('SENTINELA-SECRETA', $response->getContent());
+        $this->assertStringNotContainsString('SECRET-SENTINEL', $response->getContent());
         $this->assertStringNotContainsString('controller_token_hash', $response->getContent());
         $this->assertStringNotContainsString('password authentication', $response->getContent());
     }
@@ -200,7 +200,7 @@ final class ExceptionRenderingTest extends TestCase
 
         $response = $this->getJson('/api/v1/__test/boom')->assertStatus(500);
 
-        $this->assertStringNotContainsString('detalle interno', $response->getContent());
+        $this->assertStringNotContainsString('internal detail', $response->getContent());
     }
 
     public function test_an_unexpected_error_hands_back_a_reference_to_find_it_in_the_log(): void
@@ -221,7 +221,7 @@ final class ExceptionRenderingTest extends TestCase
             $this->assertSame(
                 ['status', 'message', 'error', 'data'],
                 array_keys($body),
-                "La ruta '{$case}' rompe el sobre.",
+                "The route '{$case}' breaks the envelope.",
             );
             $this->assertIsString($body['error']);
             $this->assertMatchesRegularExpression('/^[a-z][a-z0-9_]*$/', $body['error']);

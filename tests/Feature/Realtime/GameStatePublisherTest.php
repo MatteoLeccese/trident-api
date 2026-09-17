@@ -110,7 +110,7 @@ final class GameStatePublisherTest extends TestCase
         // socket.
         Log::spy();
         Event::fake();
-        Event::shouldReceive('dispatch')->andThrow(new \RuntimeException('reverb caído'));
+        Event::shouldReceive('dispatch')->andThrow(new \RuntimeException('reverb down'));
 
         $this->app->make(GameStatePublisher::class)->publish($this->game()->snapshot());
 

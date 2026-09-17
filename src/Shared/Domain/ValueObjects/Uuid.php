@@ -32,7 +32,7 @@ final class Uuid implements JsonSerializable, Stringable
         $normalised = strtolower($value);
 
         if (preg_match(self::PATTERN, $normalised) !== 1) {
-            throw new InvalidArgumentException("'{$value}' no es un UUID válido.");
+            throw new InvalidArgumentException("'{$value}' is not a valid UUID.");
         }
 
         return new self($normalised);

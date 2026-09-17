@@ -71,7 +71,7 @@ final class GameEndpointsTest extends TestCase
 
     public function test_a_table_that_is_too_big_is_a_business_error(): void
     {
-        $this->createGame(array_map(static fn (int $i): string => "Jugador{$i}", range(1, 16)))
+        $this->createGame(array_map(static fn (int $i): string => "Player{$i}", range(1, 16)))
             ->assertStatus(422)
             ->assertJsonPath('error', 'roster_size_invalid');
     }
@@ -92,7 +92,7 @@ final class GameEndpointsTest extends TestCase
 
     public function test_a_nickname_that_is_not_a_string_is_a_validation_error(): void
     {
-        $this->postJson('/api/v1/games', ['nicknames' => ['Ana', 'Bea', ['no soy un nombre']]])
+        $this->postJson('/api/v1/games', ['nicknames' => ['Ana', 'Bea', ['I am not a name']]])
             ->assertStatus(422)
             ->assertJsonPath('error', 'validation_error');
     }
@@ -243,6 +243,6 @@ final class GameEndpointsTest extends TestCase
             }
         }
 
-        $this->assertSame([], $unguarded, 'Toda mutación de una partida exige el token de controlador.');
+        $this->assertSame([], $unguarded, 'Every game mutation must require the controller token.');
     }
 }

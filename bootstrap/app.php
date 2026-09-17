@@ -108,7 +108,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->render(function (AuthenticationException $e, Request $request) use ($isApi) {
             return $isApi($request)
-                ? ApiResponse::error('unauthenticated', 'Autenticación requerida.', 401)
+                ? ApiResponse::error('unauthenticated', 'Authentication required.', 401)
                 : null;
         });
 
@@ -134,7 +134,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
             return ApiResponse::error(
                 'database_error',
-                'Ha ocurrido un error inesperado.',
+                'Something went wrong.',
                 500,
                 ['ref' => $reference],
             );
@@ -174,6 +174,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 $data['debug'] = ['exception' => $e::class];
             }
 
-            return ApiResponse::error('internal_error', 'Ha ocurrido un error inesperado.', 500, $data);
+            return ApiResponse::error('internal_error', 'Something went wrong.', 500, $data);
         });
     })->create();

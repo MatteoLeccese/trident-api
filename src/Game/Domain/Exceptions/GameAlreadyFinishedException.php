@@ -8,7 +8,7 @@ use Src\Shared\Domain\Exceptions\DomainException;
 
 final class GameAlreadyFinishedException extends DomainException
 {
-    public function __construct(string $message = 'Esta partida ya ha terminado.')
+    public function __construct(string $message = 'This game has already finished.')
     {
         parent::__construct($message);
     }

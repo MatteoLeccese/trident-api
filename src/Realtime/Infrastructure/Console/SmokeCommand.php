@@ -19,9 +19,9 @@ use Src\Shared\Domain\Bus\QueryBus;
  */
 final class SmokeCommand extends Command
 {
-    protected $signature = 'trident:smoke {game : Id de la partida}';
+    protected $signature = 'trident:smoke {game : Game id}';
 
-    protected $description = 'Emite el estado de una partida por el socket, para depurar desde el salón.';
+    protected $description = 'Broadcasts a game state over the socket, to debug from the living room.';
 
     public function handle(QueryBus $queries, StatePublisher $publisher): int
     {
@@ -31,11 +31,11 @@ final class SmokeCommand extends Command
 
         $publisher->publish($snapshot);
 
-        $this->info("Estado emitido en presence-game.{$gameId}");
-        $this->line('  versión: '.$snapshot->version()->value());
-        $this->line('  asientos: '.count($snapshot->toArray()['seats']));
+        $this->info("State broadcast on presence-game.{$gameId}");
+        $this->line('  version: '.$snapshot->version()->value());
+        $this->line('  seats: '.count($snapshot->toArray()['seats']));
         $this->newLine();
-        $this->comment('Si el televisor no se ha movido, el problema está en el socket, no en el estado.');
+        $this->comment('If the television has not moved, the problem is the socket, not the state.');
 
         return self::SUCCESS;
     }

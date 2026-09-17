@@ -1,0 +1,146 @@
+# Local stack for Trident.
+#
+# The API owns the shared network and the data services; the web app joins that
+# network as `external`, per golden rule 5. Two commands, one network:
+#
+#   cd trident-api && docker compose up -d --build
+#   cd ../trident-web && docker compose up -d --build
+#
+# Everything binds to 0.0.0.0 so a phone and a television on the same wifi can
+# reach it by this machine's LAN address.
+
+name: trident
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-trident}
+      POSTGRES_USER: ${DB_USERNAME:-trident}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-trident}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-trident} -d ${DB_DATABASE:-trident}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [trident-net]
+
+  # Durable Redis: locks and queues. Never evicts.
+  redis:
+    image: redis:8-alpine
+    command: redis-server --appendonly yes --maxmemory-policy noeviction
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [trident-net]
+
+  # Cache Redis: throttle counters and anything disposable. Evicts freely.
+  redis_cache:
+    image: redis:8-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [trident-net]
+
+  api:
+    build:
+      context: .
+      target: production
+    command: ["app"]
+    environment: &api-env
+      APP_NAME: Trident
+      APP_ENV: local
+      APP_KEY: ${APP_KEY:?APP_KEY is missing — run php artisan key:generate}
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: debug
+
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-trident}
+      DB_USERNAME: ${DB_USERNAME:-trident}
+      DB_PASSWORD: ${DB_PASSWORD:-trident}
+
+      REDIS_CLIENT: predis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_CACHE_HOST: redis_cache
+
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: array
+
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-trident}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-trident-local}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-trident-local-secret}
+      # Nobody writes over the socket. If this key is absent Reverb assumes 'all'.
+      REVERB_APP_ACCEPT_CLIENT_EVENTS_FROM: none
+      # Bare hosts, no scheme and no port. Globs allowed, so this covers a home LAN.
+      REVERB_ALLOWED_ORIGINS: ${REVERB_ALLOWED_ORIGINS:-localhost,127.0.0.1,192.168.*,10.*,172.*}
+      # Where the server listens…
+      REVERB_SERVER_HOST: 0.0.0.0
+      REVERB_SERVER_PORT: 8080
+      # …and where Laravel publishes to, which is a different pair entirely.
+      REVERB_HOST: reverb
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
+
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    ports:
+      - "8000:8000"
+    # Overrides the healthcheck inherited from the FrankenPHP base image, which
+    # polls Caddy's admin API. This asks the question that actually matters.
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8000/api/v1/health') ? 0 : 1);"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      redis_cache: {condition: service_healthy}
+    networks: [trident-net]
+
+  reverb:
+    build:
+      context: .
+      target: production
+    command: ["reverb"]
+    # Same image, same environment, different role.
+    environment: *api-env
+    ports:
+      - "8080:8080"
+    # Reverb does not run Caddy, so the inherited healthcheck would always fail.
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 8080) ? 0 : 1);"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    depends_on:
+      api: {condition: service_started}
+    networks: [trident-net]
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  trident-net:
+    name: trident-net

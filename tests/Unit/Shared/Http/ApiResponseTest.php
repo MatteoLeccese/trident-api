@@ -19,12 +19,12 @@ final class ApiResponseTest extends TestCase
 
     public function test_success_produces_the_standard_envelope(): void
     {
-        $response = ApiResponse::success(['game_id' => 'abc'], 'Partida obtenida');
+        $response = ApiResponse::success(['game_id' => 'abc'], 'Game loaded');
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame([
             'status' => 200,
-            'message' => 'Partida obtenida',
+            'message' => 'Game loaded',
             'error' => null,
             'data' => ['game_id' => 'abc'],
         ], $this->decode($response));
@@ -57,12 +57,12 @@ final class ApiResponseTest extends TestCase
 
     public function test_error_carries_a_machine_code_and_the_status(): void
     {
-        $response = ApiResponse::error('not_your_turn', 'No es tu turno.', 422);
+        $response = ApiResponse::error('not_your_turn', 'It is not your turn.', 422);
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertSame([
             'status' => 422,
-            'message' => 'No es tu turno.',
+            'message' => 'It is not your turn.',
             'error' => 'not_your_turn',
             'data' => null,
         ], $this->decode($response));
@@ -71,7 +71,7 @@ final class ApiResponseTest extends TestCase
     public function test_error_can_carry_data_so_a_stale_client_can_self_heal(): void
     {
         // game_version_conflict returns the current state so the phone can recover on its own.
-        $response = ApiResponse::error('game_version_conflict', 'Estado obsoleto.', 422, ['version' => 47]);
+        $response = ApiResponse::error('game_version_conflict', 'That state is out of date.', 422, ['version' => 47]);
 
         $this->assertSame(['version' => 47], $this->decode($response)['data']);
     }

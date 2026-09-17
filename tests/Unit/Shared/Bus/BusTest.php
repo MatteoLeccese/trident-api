@@ -21,7 +21,7 @@ class GreetHandler
 {
     public function handle(GreetCommand $command): string
     {
-        return "hola {$command->name}";
+        return "hello {$command->name}";
     }
 }
 
@@ -49,7 +49,7 @@ final class BusTest extends TestCase
         $bus = new LaravelCommandBus(new Container);
         $bus->register(GreetCommand::class, GreetHandler::class);
 
-        $this->assertSame('hola Ana', $bus->dispatch(new GreetCommand('Ana')));
+        $this->assertSame('hello Ana', $bus->dispatch(new GreetCommand('Ana')));
     }
 
     public function test_a_query_reaches_its_registered_handler(): void
@@ -100,13 +100,13 @@ final class BusTest extends TestCase
         {
             public function handle(GreetCommand $command): string
             {
-                return "sustituido: {$command->name}";
+                return "replaced: {$command->name}";
             }
         });
 
         $bus = new LaravelCommandBus($container);
         $bus->register(GreetCommand::class, GreetHandler::class);
 
-        $this->assertSame('sustituido: Ana', $bus->dispatch(new GreetCommand('Ana')));
+        $this->assertSame('replaced: Ana', $bus->dispatch(new GreetCommand('Ana')));
     }
 }

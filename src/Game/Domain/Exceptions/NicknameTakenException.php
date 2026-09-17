@@ -8,7 +8,7 @@ use Src\Shared\Domain\Exceptions\DomainException;
 
 final class NicknameTakenException extends DomainException
 {
-    public function __construct(string $message = 'Ese nombre ya está en uso en esta partida.')
+    public function __construct(string $message = 'That name is already taken in this game.')
     {
         parent::__construct($message);
     }

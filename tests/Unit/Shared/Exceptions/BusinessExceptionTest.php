@@ -14,17 +14,17 @@ final class BusinessExceptionTest extends TestCase
 {
     public function test_it_carries_code_message_status_and_data(): void
     {
-        $exception = new BusinessException('not_your_turn', 'No es tu turno.', 422, ['seat' => 3]);
+        $exception = new BusinessException('not_your_turn', 'It is not your turn.', 422, ['seat' => 3]);
 
         $this->assertSame('not_your_turn', $exception->errorCode());
-        $this->assertSame('No es tu turno.', $exception->getMessage());
+        $this->assertSame('It is not your turn.', $exception->getMessage());
         $this->assertSame(422, $exception->status());
         $this->assertSame(['seat' => 3], $exception->data());
     }
 
     public function test_it_defaults_to_422_with_no_data(): void
     {
-        $exception = new BusinessException('tile_already_taken', 'Esa ficha ya está cogida.');
+        $exception = new BusinessException('tile_already_taken', 'That tile is already taken.');
 
         $this->assertSame(422, $exception->status());
         $this->assertNull($exception->data());
@@ -42,13 +42,13 @@ final class BusinessExceptionTest extends TestCase
     public static function invalidCodes(): array
     {
         return [
-            'vacío' => [''],
+            'empty' => [''],
             'camelCase' => ['notYourTurn'],
             'kebab-case' => ['not-your-turn'],
-            'con espacios' => ['not your turn'],
-            'empieza por número' => ['4_oclock'],
-            'mayúsculas' => ['NOT_YOUR_TURN'],
-            'con salto de línea al final' => ["not_your_turn\n"],
+            'with spaces' => ['not your turn'],
+            'starts with a number' => ['4_oclock'],
+            'uppercase' => ['NOT_YOUR_TURN'],
+            'with a trailing newline' => ["not_your_turn\n"],
         ];
     }
 
@@ -61,6 +61,6 @@ final class BusinessExceptionTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new BusinessException($invalid, 'mensaje');
+        new BusinessException($invalid, 'message');
     }
 }

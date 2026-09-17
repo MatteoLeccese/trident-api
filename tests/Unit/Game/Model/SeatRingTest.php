@@ -36,7 +36,7 @@ final class SeatRingTest extends TestCase
                 $current = SeatRing::next($current, $seats);
             }
 
-            $this->assertSame(1, $current->value(), "Con {$seats} asientos la vuelta no cierra.");
+            $this->assertSame(1, $current->value(), "With {$seats} seats the ring does not close.");
         }
     }
 

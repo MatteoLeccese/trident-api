@@ -33,7 +33,7 @@ final class VerifyControllerToken
         if (! is_string($raw) || $raw === '') {
             throw new BusinessException(
                 'controller_token_required',
-                'Sólo el móvil que lleva la partida puede hacer eso.',
+                'Only the phone running the game can do that.',
                 401,
             );
         }
@@ -66,7 +66,7 @@ final class VerifyControllerToken
     {
         return new BusinessException(
             'controller_token_invalid',
-            'Este móvil ya no lleva la partida.',
+            'This phone is no longer running the game.',
             403,
         );
     }

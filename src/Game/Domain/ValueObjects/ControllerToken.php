@@ -49,7 +49,7 @@ final class ControllerToken
     public static function fromString(string $value): self
     {
         if (preg_match('/\A[A-Za-z0-9_-]{'.self::ENCODED_LENGTH.'}\z/', $value) !== 1) {
-            throw new InvalidArgumentException('El token de controlador no tiene la forma esperada.');
+            throw new InvalidArgumentException('The controller token is not in the expected shape.');
         }
 
         return new self($value);
@@ -83,7 +83,7 @@ final class ControllerToken
      */
     public function __debugInfo(): array
     {
-        return ['value' => '[redactado]'];
+        return ['value' => '[redacted]'];
     }
 
     private static function encode(string $bytes): string

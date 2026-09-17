@@ -25,7 +25,7 @@ final class Version implements JsonSerializable
     public static function fromInt(int $value): self
     {
         if ($value < 1) {
-            throw new InvalidArgumentException("La versión debe ser 1 o mayor, recibida {$value}.");
+            throw new InvalidArgumentException("The version must be 1 or greater, got {$value}.");
         }
 
         return new self($value);

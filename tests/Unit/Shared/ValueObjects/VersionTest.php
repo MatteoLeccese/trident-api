@@ -44,7 +44,7 @@ final class VersionTest extends TestCase
      */
     public static function invalidVersions(): array
     {
-        return ['cero' => [0], 'negativa' => [-1], 'muy negativa' => [PHP_INT_MIN]];
+        return ['zero' => [0], 'negative' => [-1], 'very negative' => [PHP_INT_MIN]];
     }
 
     #[DataProvider('invalidVersions')]

@@ -8,7 +8,7 @@ use Src\Shared\Domain\Exceptions\DomainException;
 
 final class GameNotFoundException extends DomainException
 {
-    public function __construct(string $message = 'Esa partida no existe o ya ha terminado.')
+    public function __construct(string $message = 'That game does not exist, or it has already finished.')
     {
         parent::__construct($message);
     }

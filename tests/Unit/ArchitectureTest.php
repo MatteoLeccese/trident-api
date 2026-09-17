@@ -44,7 +44,7 @@ final class ArchitectureTest extends TestCase
     {
         $root = self::root().'/'.$relative;
 
-        $this->assertDirectoryExists($root, "Se esperaba escanear '{$relative}' y no existe.");
+        $this->assertDirectoryExists($root, "Expected to scan '{$relative}' but it does not exist.");
 
         $files = [];
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root));
@@ -56,7 +56,7 @@ final class ArchitectureTest extends TestCase
         }
 
         if ($mustHaveFiles) {
-            $this->assertNotEmpty($files, "'{$relative}' no contiene PHP: este test no está probando nada.");
+            $this->assertNotEmpty($files, "'{$relative}' contains no PHP: this test is not testing anything.");
         }
 
         return $files;
@@ -92,14 +92,14 @@ final class ArchitectureTest extends TestCase
 
                 foreach (self::FORBIDDEN_IN_DOMAIN as $needle) {
                     if (str_contains($contents, $needle)) {
-                        $offences[] = "src/{$context}/Domain/".basename($file)." contiene '{$needle}'";
+                        $offences[] = "src/{$context}/Domain/".basename($file)." contains '{$needle}'";
                     }
                 }
             }
         }
 
-        $this->assertGreaterThan(0, $scanned, 'No se escaneó ningún fichero de dominio.');
-        $this->assertSame([], $offences, 'El dominio debe ser PHP puro.');
+        $this->assertGreaterThan(0, $scanned, 'No domain file was scanned.');
+        $this->assertSame([], $offences, 'The domain must be plain PHP.');
     }
 
     public function test_every_source_file_declares_strict_types(): void
@@ -113,7 +113,7 @@ final class ArchitectureTest extends TestCase
             }
         }
 
-        $this->assertSame([], $offences, 'Golden rule 12: todo fichero de src/ declara strict_types.');
+        $this->assertSame([], $offences, 'Golden rule 12: every file in src/ declares strict_types.');
     }
 
     public function test_app_stays_a_thin_shim(): void
@@ -125,7 +125,7 @@ final class ArchitectureTest extends TestCase
 
             // Names that give business logic away…
             if (preg_match('/class \w*(Handler|Command|Query|Service|Action|Repository)\b/', $contents) === 1) {
-                $offences[] = basename($file).' parece lógica de negocio';
+                $offences[] = basename($file).' looks like business logic';
             }
 
             // …and data access, which is the other way it sneaks in.
@@ -136,12 +136,12 @@ final class ArchitectureTest extends TestCase
             // data.
             foreach (['Illuminate\\Database\\Eloquent', 'DB::', 'Cache::', '->where('] as $needle) {
                 if (str_contains($contents, $needle)) {
-                    $offences[] = basename($file)." toca datos ('{$needle}')";
+                    $offences[] = basename($file)." touches data ('{$needle}')";
                 }
             }
         }
 
-        $this->assertSame([], $offences, 'La lógica de negocio vive en src/, no en app/.');
+        $this->assertSame([], $offences, 'Business logic lives in src/, not in app/.');
     }
 
     public function test_the_domain_never_depends_on_its_own_infrastructure(): void
@@ -155,11 +155,11 @@ final class ArchitectureTest extends TestCase
                 $contents = SourceInspector::codeOf($file);
 
                 if (preg_match('/^use Src\\\\\w+\\\\(Infrastructure|Application)\\\\/m', $contents) === 1) {
-                    $offences[] = basename($file).' apunta hacia fuera';
+                    $offences[] = basename($file).' points outward';
                 }
             }
         }
 
-        $this->assertSame([], $offences, 'Las dependencias apuntan hacia dentro: Infrastructure → Application → Domain.');
+        $this->assertSame([], $offences, 'Dependencies point inward: Infrastructure → Application → Domain.');
     }
 }
