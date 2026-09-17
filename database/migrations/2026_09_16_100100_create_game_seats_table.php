@@ -31,8 +31,9 @@ return new class extends Migration
             // jsonb: in Postgres it is native, in SQLite it falls back to text. Portable.
             $table->jsonb('roles')->default('[]');
 
-            // Provisioned and unused: if some Trident rule turns out to have hidden
-            // information, it costs a projection field and not a migration.
+            // Provisioned and unused. No rule hides information from anyone, so
+            // nothing writes it; dropping it would cost a migration and keeping it
+            // costs nothing.
             $table->jsonb('private_state')->default('{}');
 
             $table->unique(['game_id', 'seat_number']);

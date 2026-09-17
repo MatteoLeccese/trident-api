@@ -19,9 +19,17 @@ es pública por definición.
 | **Móvil / controlador** | `controller_token`, 32 bytes aleatorios | una cookie **httpOnly** puesta por el BFF de Next | sí |
 
 - `games.controller_token_hash = hash('sha256', $token)`, comparado con `hash_equals`.
-- El token en claro lo devuelve **exactamente una vez** `POST /api/v1/games`, y **el BFF lo quita
-  antes de que la respuesta llegue al JS del navegador**, escribiéndolo en la cookie
-  `trident_controller` (`httpOnly`, `secure` en producción, `sameSite=lax`).
+- El token en claro sale por **dos rutas, y sólo dos**: `POST /api/v1/games`, que abre la partida, y
+  `POST /api/v1/games/{gameId}/play-again`, que abre la siguiente con la misma mesa. En las dos, **el
+  BFF de Next lo consume y lo quita antes de que la respuesta llegue al JS del navegador**,
+  escribiéndolo en la cookie `trident_controller` (`httpOnly`, `secure` en producción,
+  `sameSite=lax`). `play-again` **rota** la cookie: el token de la partida anterior deja de escribir
+  en cuanto existe la nueva.
+- Por eso ninguna de esas dos puede pasar por el proxy genérico `/api/proxy/[...path]`, que devuelve
+  el cuerpo del backend tal cual y entregaría el token al navegador. Cada una tiene su propia ruta de
+  BFF —`/api/games` y `/api/games/[gameId]/play-again`— con el mismo trabajo: guardar el token en la
+  cookie y responder sin él. **Una ruta que emita el token en claro sin ruta de BFF propia es un
+  defecto.**
 - El token **nunca** entra en una URL, un QR, el historial del navegador, una pantalla compartida, un
   payload de broadcast ni un frame de Reverb.
 - La cookie es además el asidero de reanudación: `GET /api/session` devuelve `{game_id, role}`. Eso
@@ -33,8 +41,8 @@ Toda mutación es un `POST` HTTPS autenticado por el token de controlador. **El 
 de lectura de un solo sentido.** Por tanto la autorización de canal sólo responde a *"¿puedes mirar
 esta partida?"*, y lo peor que pasa si te equivocas es que un desconocido vea un dominó.
 
-Esa premisa se **enforza, no se afirma**. Cómo, exactamente — verificado contra el código de
-`laravel/reverb` 1.11.1, porque las dos primeras versiones de este párrafo eran falsas:
+Esa premisa se **enforza, no se afirma**. Cómo, exactamente — cada punto verificado contra el código
+de `laravel/reverb` 1.11.1, que es la fuente que vale para estas tres claves:
 
 - **`enable_client_messages` no existe.** No aparece en ninguna parte de Reverb. La puerta real es
   `apps.*.accept_client_events_from`, y el peligro está en su default: **si la clave falta, vale
@@ -48,25 +56,28 @@ Esa premisa se **enforza, no se afirma**. Cómo, exactamente — verificado cont
 
 ## El `JoinCode`
 
-Seis caracteres de **Crockford base32** (alfabeto sin ambigüedades: sin I, L, O ni U). `throttle:10,1`.
-Se libera cuando la partida termina o expira.
+Seis caracteres de **Crockford base32** (alfabeto sin ambigüedades: sin I, L, O ni U).
+`GET /api/v1/games/by-code/{code}` va con `throttle:20,1`. Se libera cuando la partida termina o
+expira.
 
 No es un base62 de 22 caracteres ni un UUID crudo: **eso no se puede teclear con el mando de un
 televisor**, y teclearlo es uno de los tres caminos soportados para que la pantalla grande entre.
 
-## Recuperación del controlador — el fallo que acaba una fiesta
+## No hay relevo de controlador
 
-El móvil muere, se limpia el navegador, otro amigo tiene que tomar el relevo.
-`POST /api/v1/games/{gameId}/claim-controller` canjea un **código de relevo de 4 dígitos** y rota
-`controller_token_hash`, invalidando al instante el móvil muerto.
+El móvil que abre la partida es el único que puede escribir en ella, y **no existe ningún camino para
+transferir esa capacidad**: ni un código de relevo, ni un segundo móvil, ni un botón en el televisor.
+El televisor **sólo observa**; ninguna credencial suya escribe jamás, que es la frase que gobierna
+este documento.
 
-*Quien puede leer el televisor está de pie en la habitación* es el límite de confianza correcto aquí.
+Si el móvil se muere a mitad de partida, esa partida se queda mirable en el televisor, expira por
+inactividad y el grupo crea otra. Eso es la decisión completa del autor, no un hueco pendiente: **no
+se construye nada** para ese caso, ver [`deferred-on-purpose.md`](deferred-on-purpose.md).
 
-Dos detalles que **no** son negociables:
-
-1. El código se revela con un botón deliberado de **"¿se murió el móvil?"** en el televisor. **No** se
-   pinta permanentemente junto al QR: una sola foto de esa pantalla sería control total permanente.
-2. El endpoint va duramente limitado: `throttle:5,1` por partida.
+`GameSnapshotTest` afirma que el snapshot no contiene la subcadena `takeover`, junto a `token`,
+`secret` y `hash`. **La lista de subcadenas prohibidas es una regla sobre el snapshot, no sobre las
+funciones que las acuñaron**: caza cualquier credencial que alguien proyecte con uno de esos nombres,
+así que una entrada se queda aunque la función que la sugirió no se construya.
 
 ## Lo que se descartó, y por qué
 
@@ -78,11 +89,23 @@ ocurrir.
 
 ## Cómo se vigila
 
-- `AllMutationsRequireControllerTest` — itera `Route::getRoutes()` y asegura que **toda** ruta no-GET
-  de `/api/v1/games/*` devuelve `401 controller_token_required` sin token y
-  `403 controller_token_invalid` con uno erróneo. **Convención: una ruta mutante nueva y su fila en
-  este test entran en el mismo commit.**
-- `GameSnapshotTest` — el snapshot **nunca** contiene `controller_token`, `takeover_code`,
-  `is_controller` ni un id interno de fila.
-- Grep de CI, permanente: `! grep -rE 'NEXT_PUBLIC_[A-Z_]*SECRET' trident-web/src`.
-  El repo viejo enviaba `NEXT_PUBLIC_APP_SECRET` al bundle del navegador.
+- El **barredor de mutaciones**, hoy
+  `GameEndpointsTest::test_every_mutating_game_route_demands_the_controller_token`: itera
+  `Route::getRoutes()` y exige que **toda** ruta no-GET de `/api/v1/games/*` lleve
+  `VerifyControllerToken`. La única excepción registrada es `POST /api/v1/games`, que es la ruta que
+  emite el token; `POST /api/v1/games/{gameId}/play-again` **no** es excepción, porque exige el token
+  de la partida en curso para emitir el de la siguiente. Sus hermanos del mismo fichero afirman los
+  códigos: `401 controller_token_required` sin token, `403 controller_token_invalid` con uno erróneo.
+  **Convención: una ruta mutante nueva y su fila en este test entran en el mismo commit.**
+- **Convención en el web:** una ruta de BFF que consuma el token en claro entra con su test de que la
+  respuesta que llega al JS no lo contiene. Hoy falta el de `src/app/api/games/route.ts`, que existe
+  sin test: **la convención está rota** y la salda `src/app/api/games/route.test.ts`. El de
+  `play-again` nace con su ruta.
+- `GameSnapshotTest::test_it_never_carries_a_credential` — el snapshot, en minúsculas, **nunca**
+  contiene las subcadenas `token`, `secret`, `hash` ni `takeover`, y tampoco el token en claro ni su
+  hash por valor.
+- Comprobación local, a mano, antes de cerrar cualquier cambio del web:
+  `! grep -rE 'NEXT_PUBLIC_[A-Z_]*SECRET' trident-web/src`. **No hay CI que la ejecute**, igual que no
+  la hay para Pint, PHPUnit, ESLint, `tsc --noEmit` ni Vitest: son comandos que se corren en la
+  máquina. Un `NEXT_PUBLIC_*` con un secreto dentro viaja al bundle del navegador, y el bundle lo lee
+  cualquiera que esté en la mesa.

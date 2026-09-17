@@ -52,7 +52,7 @@ docker run --rm trident-api:test                  # identical to production
 
 The suite runs on in-memory SQLite and declares everything it needs in
 `phpunit.xml`, so it does not depend on your local `.env` and behaves the same on
-a laptop, in CI and in the container.
+a laptop and inside the container.
 
 Run a subset with `docker run --rm trident-api:test test --filter=ArchitectureTest`.
 

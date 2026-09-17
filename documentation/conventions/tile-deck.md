@@ -1,44 +1,57 @@
-# El mazo: 49 fichas por defecto — y por qué eso NO está decidido
+# El mazo en código: `TileDeck`, `TilePool` y la ficha como string
 
-> Estado: **por defecto, pendiente de respuesta del autor.** Pregunta 8 de `../rules/QUESTIONS.md`.
+> Estado: **decidido** por el autor, 2026-09-17. El mazo como **regla** está enunciado en
+> [`trident-rules.md`](trident-rules.md), TR-01 a TR-05. Este documento no lo repite: fija cómo se
+> construye, dónde vive y qué trampas de implementación tiene.
 
-## El hecho
+## La ficha es un string de dos caracteres
 
-`DominoService::generateShuffledTiles()` del sistema viejo generaba **49 fichas**: todos los pares
-ordenados de dígitos 0-6 (7 × 7). Verificado contando el array literal.
+`Tile` guarda su identidad como la cadena de dos caracteres de sus caras, izquierda y luego derecha:
+`Tile::of(2, 1)->value() === '21'`. Ése es el valor que se persiste y el que viaja por el cable
+(TR-02). La notación `2|1` es de prosa y de interfaz, y no aparece en ningún payload ni en ninguna
+columna.
 
-**Un dominó doble-seis real tiene 28 fichas.** La diferencia no es cosmética:
+Consecuencias que conviene tener delante al escribir código:
 
-- En un mazo de 49, `"01"` y `"10"` son **dos tiradas distintas**.
-- Por tanto **cada ficha no-doble es el doble de probable que un doble**.
+- **`'01'` y `'10'` son fichas distintas** (TR-02). Una regla que sólo mire `total()` o si una cara
+  concreta está presente las trata igual; sólo se distinguen si alguna regla lee las dos caras de
+  forma asimétrica. `trident.v1` las lee en orden (TR-39), así que el orden importa desde el primer
+  reto.
+- **Un dominó doble-seis físico tiene 28 fichas, no 49.** Éste no es un dominó físico: no se encadenan
+  extremos, se cogen fichas. Cualquier constante `28`, cualquier bucle `for ($r = $l; ...)` y
+  cualquier arte de 28 piezas es un defecto.
+- **Entre los 49 pares ordenados hay exactamente un `'33'`** (TR-03), y de ahí sale toda la aritmética
+  de la elección: está en [`trident-rules.md`](trident-rules.md) §10 y no se recalcula en otro sitio.
 
-Si alguna regla del Trident depende de dobles, de sumas de pips o de la rareza de una cara, el mazo
-de 49 cambia el juego. Si el nombre "trident" tiene algo que ver con el 3, también.
+`TileDeck::standard()` es el **único** sitio que construye el conjunto, en orden fijo. La
+aleatoriedad es del barajado, para que una semilla dada produzca siempre la misma partida.
 
-## La decisión provisional
+## El mazo no es el pool
 
-**Se envía `ordered_pairs_49` por defecto**, generado por `TileDeck::for(config("trident.deck.mode"))`,
-y guardado por partida como un array jsonb.
+`TileDeck` es el **conjunto** de fichas de un stage. `TilePool` es su **materialización barajada**:
+una lista ordenada de posiciones 1-based, cada una con una ficha, marcadas cuando alguien las coge.
+La costura pide el mazo con `RuleSet::deck(GameContext $c)` y el framework lo baraja con la semilla de
+la partida.
 
-Enviar un default para que nada se pare es correcto. **Escribir "se decidió" en un documento de
-convenciones sería incorrecto**, y es justo cómo el autor nunca vuelve a ser preguntado.
+Tres consecuencias de esa separación:
 
-## Coste de cambiarlo
+- **La identidad de una cogida es `(stage, posición)`, nunca la ficha** (TR-04). Cada stage construye
+  un pool nuevo desde un mazo nuevo, así que el `'33'` puede salir en la elección y otra vez en el
+  juego principal. Cualquier código que suponga que una ficha es única dentro de una **partida** es un
+  defecto; dentro de **un** stage sí lo es, porque el mazo no tiene duplicados.
+- **Las caras son del servidor mientras el ruleset las oculte.** El mazo completo vive en la fila
+  `games` y la proyección emite `tile: null` en las posiciones sin coger mientras la visibilidad del
+  stage es `faces_hidden_until_taken` (TR-07). Ver [`rule-set-seam.md`](rule-set-seam.md).
+- **El tamaño del pool es una decisión del ruleset**, expresada por el mazo que devuelve `deck()`.
+  Nunca un parámetro de recorte en el framework: un tamaño de mazo es una regla.
 
-Mínimo, y así se ha diseñado a propósito:
+## Si alguna vez cambia
 
-- `TileDeck` es un value object; los dos modos (`ordered_pairs_49`, `double_six_28`) son dos ramas de
-  una factoría.
-- El mazo se **elige por `RuleSet::deck(StageId $stage)`**, no por el esquema.
-- Cambiarlo es **una variable de entorno**, y sólo afecta a **partidas nuevas** (el mazo vive en la
-  fila de la partida).
-- `TileDeckTest` ya cubre ambos: 49 únicas con `"01"` ≠ `"10"`; 28 con ellas idénticas.
+Cambiar el conjunto es reemplazar la construcción de `TileDeck::standard()`, o devolver otro mazo
+desde el `deck()` de otro ruleset; no hay migración de por medio, porque el **pool** se guarda por
+partida como jsonb y las partidas en vuelo conservan el suyo.
 
-## Lo que sí está decidido
-
-La **codificación** de una ficha: un string de **2 caracteres** de dígitos 0-6, donde el índice 0 y el
-índice 1 son las dos caras (`"36"` = un 3 y un 6). Rescatada literal del sistema viejo porque es
-compacta, JSON-safe, legible en un dump, y **ya estaba acordada en ambos lados del cable**.
-
-Se conserva tal cual **incluso si el tamaño del mazo cambia de 49 a 28**, para que el componente
-`Domino.tsx` rescatado la consuma sin ninguna modificación.
+**El mazo no sale de `config()`.** Ninguna clave de despliegue decide qué fichas hay, y
+`config/trident.php` **no declara ninguna clave de mazo**: una partida en vuelo queda fijada a su
+ruleset por `games.rule_set_id`, y su mazo sale de ahí igual que cualquier otra regla. Una clave de
+configuración que cambiase el mazo cambiaría el significado de una partida que ya está sobre una mesa.
