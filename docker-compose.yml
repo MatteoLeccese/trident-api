@@ -6,6 +6,11 @@
 #   cd trident-api && docker compose up -d --build
 #   cd ../trident-web && docker compose up -d --build
 #
+# The suite runs in the image, never on the host, and on either engine:
+#
+#   docker build --target test -t trident-api:test . && docker run --rm trident-api:test
+#   docker compose run --rm test
+#
 # Everything binds to 0.0.0.0 so a phone and a television on the same wifi can
 # reach it by this machine's LAN address.
 
@@ -135,6 +140,38 @@ services:
       start_period: 20s
     depends_on:
       api: {condition: service_started}
+    networks: [trident-net]
+
+  # The suite against the engine production uses. It does not start with
+  # `docker compose up`: it carries a profile, so it runs only when asked.
+  #
+  #   docker compose run --rm test                     # whole suite on Postgres
+  #   docker compose run --rm test --filter=GameTest   # one class
+  #
+  # Its own database, never the one the stack serves: every test migrates from
+  # empty, so pointing this at `trident` would wipe the table you are playing on.
+  test:
+    profiles: ["test"]
+    build:
+      context: .
+      target: test
+    command: ["test"]
+    environment:
+      <<: *api-env
+      DB_CONNECTION: pgsql
+      DB_DATABASE: trident_test
+      # To a file inside the container, not to stderr. The suite provokes real
+      # 500s on purpose, and their stack traces on stderr would bury the one
+      # line that says a test failed.
+      LOG_CHANNEL: single
+      # phpunit.xml declares these for a run with no service at all. Repeated
+      # here because a container environment wins over a non-forced <env>.
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
+      BROADCAST_CONNECTION: "null"
+    depends_on:
+      postgres: {condition: service_healthy}
     networks: [trident-net]
 
 volumes:

@@ -31,9 +31,9 @@ return new class extends Migration
             // jsonb: in Postgres it is native, in SQLite it falls back to text. Portable.
             $table->jsonb('roles')->default('[]');
 
-            // Provisioned and unused. No rule hides information from anyone, so
-            // nothing writes it; dropping it would cost a migration and keeping it
-            // costs nothing.
+            // Whatever a RuleSet hides from the rest of the table. The repository
+            // carries it in both directions and the snapshot never shows it; no
+            // rule writes into it yet.
             $table->jsonb('private_state')->default('{}');
 
             $table->unique(['game_id', 'seat_number']);

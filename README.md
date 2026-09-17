@@ -35,26 +35,37 @@ curl -s localhost:8000/api/v1/health
 
 Then start the web app — see [`../trident-web/README.md`](../trident-web/README.md).
 
-### Without Docker
-
-Possible, but you need `php8.4-pgsql` and `php8.4-sqlite3` installed, plus a
-PostgreSQL and a Redis of your own. The container exists so you do not have to.
+**This project runs in Docker.** Nothing needs installing on your machine beyond
+Docker itself — not PHP, not its extensions, not PostgreSQL. Anything the
+application needs belongs in the image.
 
 ---
 
 ## Tests
 
+The suite runs inside the image, never on the host, and on either engine.
+
 ```bash
-php artisan test                                  # on your machine
-docker build --target test -t trident-api:test .  # or inside an image
-docker run --rm trident-api:test                  # identical to production
+docker build --target test -t trident-api:test .
+docker run --rm trident-api:test                       # SQLite, no services
+docker run --rm trident-api:test test --filter=GameTest
 ```
 
-The suite runs on in-memory SQLite and declares everything it needs in
-`phpunit.xml`, so it does not depend on your local `.env` and behaves the same on
-a laptop and inside the container.
+SQLite is the default because it needs nothing running and finishes in about a
+second. Everything the suite depends on is declared in `phpunit.xml`, so it never
+reads your `.env`.
 
-Run a subset with `docker run --rm trident-api:test test --filter=ArchitectureTest`.
+```bash
+docker compose up -d postgres
+docker compose run --rm test                           # PostgreSQL
+docker compose run --rm test --filter=GameTest
+```
+
+Run it on PostgreSQL before trusting anything that touches persistence. SQLite
+cannot see how `jsonb` normalises what you stored, what `timestamptz` does to an
+offset, or when a unique constraint is checked — and every one of those has
+already produced a real defect here. The `test` service carries its own database,
+`trident_test`, so it never touches the game you are playing on.
 
 ---
 

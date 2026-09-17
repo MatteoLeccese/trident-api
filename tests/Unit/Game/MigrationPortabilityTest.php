@@ -134,14 +134,26 @@ final class MigrationPortabilityTest extends TestCase
         }
     }
 
-    public function test_the_move_log_has_the_index_that_serialises_concurrent_writes(): void
+    public function test_the_move_log_is_unique_by_game_and_sequence(): void
     {
-        // `lockForUpdate()` is a no-op on SQLite, so this index — and not a lock —
-        // is what prevents two writes with the same expected version from both
-        // committing.
+        // A sequence number belongs to exactly one entry, so two writes that
+        // derived the same next sequence cannot both commit. `lockForUpdate()` is
+        // a no-op on SQLite, so no lock can stand in for this index.
         $sql = implode(' ', $this->compile('2026_09_16_100200_create_game_moves_table.php', $this->postgres()));
 
         $this->assertStringContainsString('game_moves_game_id_seq_unique', $sql);
+    }
+
+    public function test_the_seat_json_columns_are_jsonb_on_postgres(): void
+    {
+        // The repository encodes both columns by hand, because a bulk insert goes
+        // through the query builder and applies no cast. `jsonb` parses what it is
+        // given and renders it again on the way out, so nothing may depend on the
+        // stored text being byte for byte what was encoded.
+        $sql = implode(' ', $this->compile('2026_09_16_100100_create_game_seats_table.php', $this->postgres()));
+
+        $this->assertStringContainsString('"roles" jsonb', $sql);
+        $this->assertStringContainsString('"private_state" jsonb', $sql);
     }
 
     public function test_seats_are_unique_by_number_and_by_folded_nickname(): void

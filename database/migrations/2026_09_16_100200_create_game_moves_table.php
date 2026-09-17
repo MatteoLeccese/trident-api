@@ -25,10 +25,11 @@ return new class extends Migration
 
             $table->timestampTz('created_at');
 
-            // THIS index is the concurrency control, not a belt over a lock:
-            // `lockForUpdate()` is literally a no-op in SQLite, so the suite cannot
-            // exercise a lock. Two writes with the same expected version cannot both
-            // commit.
+            // A sequence number belongs to exactly one entry: two writes that
+            // derived the same next sequence cannot both commit. It is not an
+            // expected-version guard — the writer does not carry the version it
+            // read into the write — and it is not a lock either: `lockForUpdate()`
+            // is a no-op in SQLite, so the suite cannot exercise one.
             $table->unique(['game_id', 'seq']);
         });
     }

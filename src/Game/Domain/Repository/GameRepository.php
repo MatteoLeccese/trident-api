@@ -9,9 +9,8 @@ use Src\Game\Domain\ValueObjects\GameId;
 use Src\Game\Domain\ValueObjects\JoinCode;
 
 /**
- * The system's only repository. `backend.md` warns against half-mixing
- * repositories and loose Eloquent: with a single aggregate, full adoption fits
- * in one file.
+ * The system's only repository: one aggregate, one place that reads and writes
+ * it, and no loose Eloquent anywhere else.
  *
  * Seats do NOT have a repository of their own: they are always loaded and saved
  * through their game, and no route addresses them separately.
@@ -25,9 +24,9 @@ interface GameRepository
     /**
      * Saves the aggregate and empties its pending move log.
      *
-     * The implementation is responsible for making the row, the seats and the
-     * moves go in within the same transaction: the old system wrote the game, the
-     * players and the cache separately and without a transaction.
+     * The implementation puts the row, the seats and the moves in within the same
+     * transaction: a state, its roster and its move log are never readable in
+     * disagreement with each other.
      */
     public function save(Game $game): void;
 }

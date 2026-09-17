@@ -18,6 +18,16 @@ wait_for_postgres() {
   echo "→ postgres is up"
 }
 
+# The server, not the application's database: the test role reaches Postgres
+# before the database it is about to create exists.
+wait_for_postgres_server() {
+  echo "→ waiting for postgres at ${DB_HOST}:${DB_PORT:-5432}…"
+  until php -r "new PDO('pgsql:host=${DB_HOST};port=${DB_PORT:-5432};dbname=postgres', '${DB_USERNAME}', '${DB_PASSWORD}');" 2>/dev/null; do
+    sleep 1
+  done
+  echo "→ postgres is up"
+}
+
 # Caching config at build time would bake in build-time env; it is done here so
 # the same image picks up whatever this environment provides.
 php artisan config:clear >/dev/null 2>&1 || true
@@ -44,6 +54,22 @@ case "${ROLE}" in
     exec php artisan schedule:work
     ;;
   test)
+    # The suite runs on SQLite by default, declared in phpunit.xml, and needs no
+    # service. Point DB_CONNECTION at pgsql to run the same suite against the
+    # engine production uses: that is the only way to see what SQLite cannot,
+    # such as how jsonb normalises a value or what timestamptz does to an offset.
+    if [ "${DB_CONNECTION}" = "pgsql" ]; then
+      wait_for_postgres_server
+      # RefreshDatabase migrates from empty on every test, but it cannot create
+      # the database itself. Created here, so the suite never depends on the
+      # state of a volume that may predate it.
+      php -r "
+        \$pdo = new PDO('pgsql:host=${DB_HOST};port=${DB_PORT:-5432};dbname=postgres', '${DB_USERNAME}', '${DB_PASSWORD}');
+        \$exists = \$pdo->query(\"SELECT 1 FROM pg_database WHERE datname = '${DB_DATABASE}'\")->fetchColumn();
+        if (! \$exists) { \$pdo->exec('CREATE DATABASE \"${DB_DATABASE}\"'); }
+      "
+    fi
+
     # PHPUnit directly, not `artisan test`: Collision's pretty printer expects a
     # terminal and files that are not in this image, and adds noise that looks
     # like failures. Raw PHPUnit gives clean output and an honest exit code.

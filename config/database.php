@@ -19,7 +19,12 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    // PostgreSQL is the only source of truth, so it is also the fallback. A
+    // missing DB_CONNECTION must not silently move the application onto a file:
+    // the container would migrate it, serve from it, and lose it on the next
+    // deploy without a single error. The test suite selects sqlite explicitly in
+    // phpunit.xml.
+    'default' => env('DB_CONNECTION', 'pgsql'),
 
     /*
     |--------------------------------------------------------------------------
@@ -95,6 +100,10 @@ return [
             'username' => env('DB_USERNAME', 'root'),
             'password' => env('DB_PASSWORD', ''),
             'charset' => env('DB_CHARSET', 'utf8'),
+            // The session runs in UTC whatever the server's default is: a
+            // `timestamptz` is written from a string that carries no offset, so
+            // the session zone is what decides which instant is stored.
+            'timezone' => 'UTC',
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',

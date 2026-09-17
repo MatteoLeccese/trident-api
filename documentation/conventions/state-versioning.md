@@ -78,10 +78,24 @@ La igualdad afirmada hoy es la del evento con el snapshot:
 snapshot, y nada más: no emite ninguna petición HTTP, así que no toca `GameController::show` ni el
 sobre `ApiResponse`, que es justo por donde una proyección se parte en dos.
 
-> El hueco lo cierra `tests/Feature/Game/SnapshotDeliveryParityTest.php`, **todavía por escribir**: emite
-> `GET /api/v1/games/{gameId}` de verdad y afirma que el `data` del sobre y el `broadcastWith()` del
-> mismo snapshot son **idénticos byte a byte**. Hasta que ese test exista, R2 está enforzada a medias
-> y la mitad que falta es precisamente el endpoint.
+> El hueco lo cierra `tests/Feature/Game/SnapshotDeliveryParityTest.php`, **ya escrito**: emite
+> `GET /api/v1/games/{gameId}` de verdad, contra el repositorio real, y afirma que el `data` del sobre
+> y el `broadcastWith()` que salió de esa misma escritura son **idénticos byte a byte**. Cubre la
+> creación, un renombrado por HTTP y una partida terminada.
+
+### `join_code` es `null` en una partida terminada
+
+La partida terminada es el caso que parte la proyección en dos, y por eso el test de paridad lo
+incluye. El código se libera al terminar —`games.join_code` pasa a NULL para que otra mesa pueda
+teclearlo—, así que la fila ya no lo tiene, mientras que el agregado vivo que se acaba de emitir
+todavía lo recuerda. Si la proyección emitiera "el código que tenga a mano", el televisor recibiría
+`K7QP3M` por el socket y `ZZZZZZ` —el relleno con el que `EloquentGameRepository` reconstituye una
+partida sin código— por el REST un segundo después: mismos `game_id` y `version`, bytes distintos.
+
+`GameSnapshot` lo resuelve en la proyección y no en el almacenamiento: con un estado terminal emite
+`"join_code": null`. Null explícito y nunca una clave ausente, la misma regla que sigue `tile`. Una
+partida terminada no se puede teclear desde ningún sitio, así que el único valor correcto por las dos
+rutas es "no hay código".
 
 Esto no es ceremonia: el `GameController::show` viejo descartaba en silencio los `dominoes` y el
 `game_phase` que su propio servicio devolvía. Ésa es exactamente esta divergencia, sin el test que la

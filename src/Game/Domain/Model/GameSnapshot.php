@@ -7,6 +7,7 @@ namespace Src\Game\Domain\Model;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Src\Game\Domain\ValueObjects\GameId;
+use Src\Game\Domain\ValueObjects\GameStatus;
 use Src\Game\Domain\ValueObjects\JoinCode;
 use Src\Shared\Domain\ValueObjects\Version;
 
@@ -52,7 +53,7 @@ final class GameSnapshot
      *     game_id: string,
      *     version: int,
      *     status: string,
-     *     join_code: string,
+     *     join_code: string|null,
      *     seats: list<array{seat: int, nickname: string, roles: list<string>}>,
      *     last_activity_at: string
      * }
@@ -63,7 +64,12 @@ final class GameSnapshot
             'game_id' => $this->id->value(),
             'version' => $this->version->value(),
             'status' => $this->status,
-            'join_code' => $this->joinCode->value(),
+            // A terminal game has released its code, so both delivery paths carry
+            // null for it: the row no longer holds the code, and a live aggregate
+            // that still remembers one must not project a code nobody can use.
+            'join_code' => GameStatus::isTerminal($this->status)
+                ? null
+                : $this->joinCode->value(),
             // Array of objects with an explicit `seat`: never a positional map,
             // which was another of the ways the old system diverged.
             'seats' => $this->seats->toArray(),
