@@ -215,6 +215,48 @@ final class GameEndpointsTest extends TestCase
         )->assertStatus(403);
     }
 
+    /**
+     * Every non-GET route of `/api/v1/games/*`, as `METHOD uri`, sorted.
+     *
+     * @return list<string>
+     */
+    private function mutatingRoutes(): array
+    {
+        $mutations = [];
+
+        foreach (Route::getRoutes() as $route) {
+            $uri = $route->uri();
+            $methods = array_values(array_diff($route->methods(), ['HEAD', 'OPTIONS']));
+
+            if (! str_starts_with($uri, 'api/v1/games') || $methods === ['GET']) {
+                continue;
+            }
+
+            $mutations[] = implode('|', $methods).' '.$uri;
+        }
+
+        sort($mutations);
+
+        return $mutations;
+    }
+
+    public function test_the_sweeper_sees_every_mutating_game_route(): void
+    {
+        // The three tests below iterate `Route::getRoutes()`, so a route that was
+        // never registered passes them by looking at nothing. This is the list
+        // itself: a new mutating route lands here in the same commit, and a route
+        // that disappears cannot take its guard's coverage with it in silence.
+        $this->assertSame([
+            'PATCH api/v1/games/{gameId}/seats/{seat}',
+            'POST api/v1/games',
+            'POST api/v1/games/{gameId}/play-again',
+            'POST api/v1/games/{gameId}/pool/{position}/draw',
+            'POST api/v1/games/{gameId}/room-config',
+            'POST api/v1/games/{gameId}/start',
+            'PUT api/v1/games/{gameId}/seats/order',
+        ], $this->mutatingRoutes());
+    }
+
     public function test_every_mutating_game_route_demands_the_controller_token(): void
     {
         // Sweeper test: a new mutating route and its row here land in the same
@@ -231,7 +273,9 @@ final class GameEndpointsTest extends TestCase
             }
 
             // Creating a game is the only mutation that cannot demand the token:
-            // it is precisely the one that issues it.
+            // it is precisely the one that issues it. `play-again` is NOT an
+            // exception, because it demands the token of the game in play in
+            // order to issue the next game's.
             if ($uri === 'api/v1/games' && in_array('POST', $methods, true)) {
                 continue;
             }
@@ -244,5 +288,66 @@ final class GameEndpointsTest extends TestCase
         }
 
         $this->assertSame([], $unguarded, 'Every game mutation must require the controller token.');
+    }
+
+    /**
+     * One real request per mutating route, with the path parameters filled in.
+     *
+     * The middleware runs before the controller is resolved, so no route needs a
+     * valid body to be refused: the guard is asserted by its code and not by the
+     * shape of what it was handed.
+     *
+     * @return list<array{string, string}>
+     */
+    private function mutationsAgainst(string $gameId): array
+    {
+        $requests = [];
+
+        foreach ($this->mutatingRoutes() as $mutation) {
+            [$methods, $uri] = explode(' ', $mutation, 2);
+
+            if ($uri === 'api/v1/games') {
+                continue;
+            }
+
+            $requests[] = [
+                explode('|', $methods)[0],
+                '/'.str_replace(['{gameId}', '{seat}', '{position}'], [$gameId, '2', '1'], $uri),
+            ];
+        }
+
+        return $requests;
+    }
+
+    public function test_no_mutating_game_route_answers_without_a_token(): void
+    {
+        $gameId = (string) $this->createGame()->json('data.game.game_id');
+        $seen = 0;
+
+        foreach ($this->mutationsAgainst($gameId) as [$method, $path]) {
+            $this->json($method, $path)
+                ->assertStatus(401)
+                ->assertJsonPath('error', 'controller_token_required');
+
+            $seen++;
+        }
+
+        $this->assertGreaterThan(0, $seen, 'No mutation was swept: this test is not testing anything.');
+    }
+
+    public function test_no_mutating_game_route_answers_to_the_wrong_token(): void
+    {
+        $gameId = (string) $this->createGame()->json('data.game.game_id');
+        $seen = 0;
+
+        foreach ($this->mutationsAgainst($gameId) as [$method, $path]) {
+            $this->json($method, $path, [], ['X-Trident-Controller-Token' => str_repeat('a', 43)])
+                ->assertStatus(403)
+                ->assertJsonPath('error', 'controller_token_invalid');
+
+            $seen++;
+        }
+
+        $this->assertGreaterThan(0, $seen, 'No mutation was swept: this test is not testing anything.');
     }
 }

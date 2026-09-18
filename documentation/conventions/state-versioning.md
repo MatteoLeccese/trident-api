@@ -109,10 +109,46 @@ sala —un televisor entra por `JoinCode` y nunca vio la respuesta de creación�
 no es una credencial. El cliente **no** guarda un valor propio, así que móvil y televisor no pueden
 discrepar. Su restricción está en [`room-config.md`](room-config.md): menor que `idle_timeout_minutes`.
 
+### Los efectos viajan en la misma proyección
+
+`effects` es la **salida entera de la costura** —`assign_role`, `challenge`, `announce`, tal y como
+[`rule-set-seam.md`](rule-set-seam.md) los declara— y es lo que la UI pinta. Llevan la clave, nunca el
+texto (TR-42), y el reto lleva el asiento al que apunta, así que el cliente pinta la excepción de
+TR-44 sin saber qué es un trident. Sin este campo la costura sería de sólo escritura: los efectos
+existirían únicamente dentro de `game_moves.payload`, y ningún cliente vería nunca un reto.
+
+Son los efectos de **la escritura de la que salió esta versión**, no un acumulado y no un delta que el
+cliente vaya sumando: pertenecen a esta versión igual que el tablero, se leen de la última entrada del
+log al reconstituir la partida, y una versión que no consultó ninguna regla —un renombrado— lleva la
+lista vacía. Por eso las dos rutas de entrega siguen coincidiendo byte a byte: las dos los serializan
+con `Effect::toArray()`, y un `jsonb` reordenado no las separa.
+
+Un frame perdido pierde su efecto, igual que la ficha que estuvo boca arriba sobre la mesa mientras
+nadie miraba. El estado, que es lo que tiene que converger, se sigue auto-curando entero.
+
 `seats` es un **array de objetos con un `seat` explícito** — nunca un mapa posicional, nunca filas de
 BD crudas. `pool` sigue la misma regla con un `position` explícito, y una posición sin coger emite
 `tile: null`: **null explícito, nunca una clave ausente**, porque el tipo del frontend distingue las
 dos y una clave que a veces está es un contrato que nadie puede tipar.
+
+Cada posición del `pool` lleva cinco claves, en este orden: `position`, `tile`, `taken`, `seat` y
+`on_board`.
+
+- **`seat`** es el asiento que cogió la posición, y `null` mientras nadie la ha cogido. Es lo único
+  que permite que el televisor pinte **quién** llenó el tablero sin contar un solo punto, y no
+  publica nada que la misma entrada no tuviera: una posición cogida ya lleva su cara (TR-08). No es
+  una regla, y por eso no existe en `GameContext` ni en `DrawContext`: lo que una regla lee de lo ya
+  ocurrido es el `DrawLog`.
+- **`on_board`** es la presentación del tablero ya resuelta: `false` en una posición cogida que el
+  tablero deja de dibujar. La decide `RuleSet::boardPresence()` por stage, con vocabulario cerrado
+  (`taken_stays_on_board` | `taken_leaves_board`), y **se resuelve aquí y no en el cliente** — un
+  cliente que leyese el ajuste tendría que construir la clave del stage en el que está, y una clave
+  que nombra un stage es una regla viviendo en un fichero de React. Es un booleano en el cable
+  precisamente porque el cliente ya no tiene que interpretar nada.
+
+Por eso el `drawn_tiles.*` de [`room-config.md`](room-config.md) **sí cambia los bytes del
+snapshot**, y sólo en esa clave: un ajuste de sala que no cambiara nada en el cable sería un ajuste
+que ninguna pantalla puede honrar sin conocer una regla.
 
 **Una sola proyección para todo el mundo.** Lo que se oculta se oculta por stage —lo decide
 `RuleSet::visibility()`, con vocabulario cerrado (`faces_hidden_until_taken` | `faces_open`), ver

@@ -30,6 +30,17 @@ final class TileTest extends TestCase
         $this->assertSame('00', $tile->value());
     }
 
+    public function test_a_face_may_be_any_single_digit(): void
+    {
+        // The alphabet belongs to the wire format of TR-02 and not to a game:
+        // which faces are dealt is decided by the deck a ruleset returns, so a
+        // double-nine set is a deck this class has to be able to hold.
+        $this->assertSame('99', Tile::fromString('99')->value());
+        $this->assertSame(7, Tile::fromString('79')->left());
+        $this->assertSame(9, Tile::fromString('79')->right());
+        $this->assertTrue(Tile::fromString('88')->isDouble());
+    }
+
     public function test_it_knows_its_pip_total(): void
     {
         $this->assertSame(9, Tile::fromString('36')->total());
@@ -63,7 +74,6 @@ final class TileTest extends TestCase
             'empty' => [''],
             'one digit' => ['3'],
             'three digits' => ['366'],
-            'a seven' => ['37'],
             'a letter' => ['3a'],
             'negative' => ['-3'],
             'with a space' => ['3 6'],

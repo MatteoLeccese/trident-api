@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Tests\Unit\Game\Model;
 
 use PHPUnit\Framework\TestCase;
+use Src\Game\Domain\Exceptions\InvalidSeatOrderException;
 use Src\Game\Domain\Exceptions\NicknameTakenException;
 use Src\Game\Domain\Exceptions\RosterSizeException;
 use Src\Game\Domain\Exceptions\SeatNotFoundException;
+use Src\Game\Domain\Model\Seat;
 use Src\Game\Domain\Model\SeatRoster;
 use Src\Game\Domain\ValueObjects\Nickname;
 use Src\Game\Domain\ValueObjects\SeatNumber;
@@ -110,6 +112,71 @@ final class SeatRosterTest extends TestCase
         $this->expectException(SeatNotFoundException::class);
 
         $this->roster(['Ana', 'Bea', 'Caro'])->rename(SeatNumber::fromInt(9), Nickname::fromString('Zoe'));
+    }
+
+    public function test_reordering_renumbers_by_absolute_permutation(): void
+    {
+        // The list is the arrangement that is wanted: the seat numbered 3 today
+        // becomes seat 1, the seat numbered 1 becomes seat 2, and so on.
+        $reordered = $this->roster(['Ana', 'Bea', 'Caro'])->reorder($this->order([3, 1, 2]));
+
+        $this->assertSame(['Caro', 'Ana', 'Bea'], array_column($reordered->toArray(), 'nickname'));
+        $this->assertSame([1, 2, 3], array_column($reordered->toArray(), 'seat'));
+    }
+
+    public function test_reordering_leaves_the_roster_it_was_asked_of_untouched(): void
+    {
+        $roster = $this->roster(['Ana', 'Bea', 'Caro']);
+
+        $roster->reorder($this->order([3, 2, 1]));
+
+        $this->assertSame(['Ana', 'Bea', 'Caro'], array_column($roster->toArray(), 'nickname'));
+    }
+
+    public function test_reordering_carries_each_seat_its_identity_and_its_roles(): void
+    {
+        $roster = SeatRoster::fromSeats([
+            Seat::of(SeatNumber::fromInt(1), Nickname::fromString('Ana'), ['marked']),
+            Seat::of(SeatNumber::fromInt(2), Nickname::fromString('Bea')),
+            Seat::of(SeatNumber::fromInt(3), Nickname::fromString('Caro')),
+        ]);
+
+        $moved = $roster->reorder($this->order([2, 3, 1]))->at(SeatNumber::fromInt(3));
+
+        $this->assertSame($roster->at(SeatNumber::first())->id()->value(), $moved->id()->value());
+        $this->assertSame(['marked'], $moved->roles());
+    }
+
+    public function test_an_order_that_does_not_name_every_seat_is_refused(): void
+    {
+        $this->expectException(InvalidSeatOrderException::class);
+
+        $this->roster(['Ana', 'Bea', 'Caro'])->reorder($this->order([1, 2]));
+    }
+
+    public function test_an_order_that_names_a_seat_twice_is_refused(): void
+    {
+        // It would leave one number unassigned and another claimed twice, which
+        // is the one way an absolute permutation can break contiguity.
+        $this->expectException(InvalidSeatOrderException::class);
+
+        $this->roster(['Ana', 'Bea', 'Caro'])->reorder($this->order([1, 1, 2]));
+    }
+
+    public function test_an_order_that_names_a_seat_nobody_holds_is_refused(): void
+    {
+        $this->expectException(SeatNotFoundException::class);
+
+        $this->roster(['Ana', 'Bea', 'Caro'])->reorder($this->order([1, 2, 9]));
+    }
+
+    /**
+     * @param  list<int>  $numbers
+     * @return list<SeatNumber>
+     */
+    private function order(array $numbers): array
+    {
+        return array_map(SeatNumber::fromInt(...), $numbers);
     }
 
     public function test_asking_for_a_seat_that_does_not_exist_fails(): void

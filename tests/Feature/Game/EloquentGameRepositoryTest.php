@@ -8,16 +8,29 @@ use DateTimeImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Src\Game\Application\Service\GameProjector;
 use Src\Game\Domain\Model\Game;
+use Src\Game\Domain\Model\PlayState;
 use Src\Game\Domain\Model\Seat;
 use Src\Game\Domain\Model\SeatRoster;
 use Src\Game\Domain\Repository\GameRepository;
+use Src\Game\Domain\Rules\PendingChoice;
+use Src\Game\Domain\Rules\RoomConfig;
+use Src\Game\Domain\Rules\RuleState;
+use Src\Game\Domain\Rules\StageId;
+use Src\Game\Domain\Rules\Trident\TridentRuleSet;
 use Src\Game\Domain\ValueObjects\ControllerToken;
+use Src\Game\Domain\ValueObjects\Draw;
+use Src\Game\Domain\ValueObjects\DrawLog;
 use Src\Game\Domain\ValueObjects\GameId;
 use Src\Game\Domain\ValueObjects\GameStatus;
 use Src\Game\Domain\ValueObjects\JoinCode;
 use Src\Game\Domain\ValueObjects\Nickname;
+use Src\Game\Domain\ValueObjects\PoolPosition;
 use Src\Game\Domain\ValueObjects\SeatNumber;
+use Src\Game\Domain\ValueObjects\Seed;
+use Src\Game\Domain\ValueObjects\Tile;
+use Src\Game\Domain\ValueObjects\TilePool;
 use Src\Game\Infrastructure\Persistence\EloquentGameRepository;
 use Src\Shared\Domain\ValueObjects\Version;
 use Src\Shared\Infrastructure\Service\FrozenClock;
@@ -38,9 +51,23 @@ final class EloquentGameRepositoryTest extends TestCase
 
     private const OTHER_GAME_ID = '1b4e28ba-2fa1-4d2b-a1a5-1c48d1a5a5a5';
 
+    /** A literal shuffle seed: a round trip that depends on chance proves nothing. */
+    private const SEED = 'ZbVQ8vUCcVNJNCYLbhwSEhz1vmKpSiIk0WBlGzHU7Ss';
+
     private function repository(): GameRepository
     {
         return $this->app->make(GameRepository::class);
+    }
+
+    /**
+     * The projection, built through the real projector: the production wiring is
+     * what is under test here, doubles included nowhere.
+     *
+     * @return array<string, mixed>
+     */
+    private function projectionOf(Game $game): array
+    {
+        return $this->app->make(GameProjector::class)->project($game)->toArray();
     }
 
     /**
@@ -116,6 +143,7 @@ final class EloquentGameRepositoryTest extends TestCase
             $game->version()->next(),
             new DateTimeImmutable('2026-09-16 20:05:00'),
             $game->lastSequence(),
+            $game->playState(),
         );
     }
 
@@ -275,7 +303,7 @@ final class EloquentGameRepositoryTest extends TestCase
             $this->assertSame(['seat', 'nickname', 'roles'], array_keys($seat->toArray()));
         }
 
-        $encoded = (string) json_encode($reloaded->snapshot()->toArray());
+        $encoded = (string) json_encode($this->projectionOf($reloaded));
 
         $this->assertStringNotContainsString('private_state', $encoded);
         $this->assertStringNotContainsString('6-3', $encoded);
@@ -444,7 +472,11 @@ final class EloquentGameRepositoryTest extends TestCase
 
         $this->assertInstanceOf(Game::class, $reloaded);
         $this->assertSame($game->seats()->toArray(), $reloaded->seats()->toArray());
-        $this->assertSame($game->snapshot()->toArray(), $reloaded->snapshot()->toArray());
+        $this->assertEquals($this->projectionOf($game), $this->projectionOf($reloaded));
+        $this->assertSame(
+            json_encode($this->projectionOf($game)),
+            json_encode($this->projectionOf($reloaded)),
+        );
     }
 
     public function test_a_rotation_of_a_full_table_of_fifteen_persists_in_one_save(): void
@@ -619,6 +651,502 @@ final class EloquentGameRepositoryTest extends TestCase
 
         $this->assertSame($before, $this->nicknamesInOrder());
         $this->assertSame(3, DB::table('game_seats')->where('game_id', self::GAME_ID)->count());
+    }
+
+    /**
+     * A saved game in play: settings written in the lobby, then started, then
+     * three positions turned over.
+     *
+     * The seed is a literal so that the pool is the same pool on every run: a
+     * round trip that depends on chance proves nothing about what came back.
+     */
+    private function playedGame(int $draws = 3): Game
+    {
+        $game = Game::open(
+            GameId::fromString(self::GAME_ID),
+            JoinCode::fromString('K7QP3M'),
+            ControllerToken::generate(),
+            SeatRoster::fromNicknames(array_map(Nickname::fromString(...), ['Ana', 'Bea', 'Caro'])),
+            FrozenClock::at('2026-09-16 20:00:00'),
+            Seed::fromString(self::SEED),
+        );
+
+        $game->configureRoom(
+            RoomConfig::fromArray(['challenge.face.0' => 'Drink with the person on your left']),
+            FrozenClock::at('2026-09-16 20:01:00'),
+        );
+        $game->start(new TridentRuleSet, FrozenClock::at('2026-09-16 20:02:00'));
+
+        for ($position = 1; $position <= $draws; $position++) {
+            $game->drawTile(
+                PoolPosition::fromInt($position),
+                new TridentRuleSet,
+                FrozenClock::at('2026-09-16 20:0'.($position + 2).':00'),
+            );
+        }
+
+        $this->repository()->save($game);
+
+        return $game;
+    }
+
+    /**
+     * The row of the game under test.
+     */
+    private function gameRow(): object
+    {
+        $row = DB::table('games')->where('id', self::GAME_ID)->first();
+
+        $this->assertNotNull($row);
+
+        return $row;
+    }
+
+    /**
+     * Who took what, as plain integers keyed by position.
+     *
+     * @return array<int, int>
+     */
+    private function takersOf(Game $game): array
+    {
+        return array_map(static fn (SeatNumber $seat): int => $seat->value(), $game->pool()->takers());
+    }
+
+    /**
+     * The same map with its keys in a fixed order.
+     *
+     * @param  array<string, mixed>  $map
+     * @return array<string, mixed>
+     */
+    private function sorted(array $map): array
+    {
+        ksort($map);
+
+        return $map;
+    }
+
+    /**
+     * @return list<array{string, int, int, string}>
+     */
+    private function drawLogOf(Game $game): array
+    {
+        return array_map(
+            static fn (Draw $draw): array => [
+                $draw->stage(),
+                $draw->seat()->value(),
+                $draw->position()->value(),
+                $draw->tile()->value(),
+            ],
+            $game->drawLog()->all(),
+        );
+    }
+
+    public function test_the_whole_play_state_comes_back_out_of_the_database(): void
+    {
+        // Without this, a reloaded game silently restarts: no ruleset, no stage, no
+        // cursor, no board, and a fresh shuffle the next time anyone touches it.
+        $game = $this->playedGame();
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        $this->assertSame($game->ruleSetId(), $reloaded->ruleSetId());
+        $this->assertSame($game->stage()?->value(), $reloaded->stage()?->value());
+        $this->assertSame($game->currentSeat()?->value(), $reloaded->currentSeat()?->value());
+        $this->assertSame($game->status(), $reloaded->status());
+        // By pairs and not by order: `jsonb` keeps an object's keys in its own
+        // order, so the aggregate's order is not what comes back. The projection
+        // is what imposes one, and that is asserted below.
+        $this->assertSame(
+            $this->sorted($game->roomConfig()->toArray()),
+            $this->sorted($reloaded->roomConfig()->toArray()),
+        );
+        $this->assertSame($game->ruleState()?->toArray(), $reloaded->ruleState()?->toArray());
+        $this->assertSame($game->turnNumber(), $reloaded->turnNumber());
+        $this->assertSame(
+            $game->stageVisits((string) $game->stage()?->value()),
+            $reloaded->stageVisits((string) $reloaded->stage()?->value()),
+        );
+    }
+
+    public function test_the_projection_of_a_reloaded_game_is_the_projection_of_the_live_one(): void
+    {
+        // The strongest statement this file can make about the round trip: the two
+        // deliveries of documentation/conventions/state-versioning.md are the same
+        // bytes whether the game came from memory or from a row.
+        $game = $this->playedGame();
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        $this->assertEquals($this->projectionOf($game), $this->projectionOf($reloaded));
+        $this->assertSame(
+            json_encode($this->projectionOf($game)),
+            json_encode($this->projectionOf($reloaded)),
+        );
+    }
+
+    public function test_the_pool_keeps_every_face_including_the_ones_the_projection_hides(): void
+    {
+        // Concealment belongs to the projection and not to storage (TR-09): the
+        // row holds all 49 faces in pool order, and the taken positions with them.
+        $game = $this->playedGame();
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        $this->assertSame(49, $reloaded->pool()->count());
+        $this->assertSame([1, 2, 3], array_keys($reloaded->pool()->takers()));
+        $this->assertSame(
+            array_map(static fn (Tile $tile): string => $tile->value(), $game->pool()->tiles()),
+            array_map(static fn (Tile $tile): string => $tile->value(), $reloaded->pool()->tiles()),
+        );
+
+        // And the projection still hides the faces nobody has taken.
+        $pool = $this->projectionOf($reloaded)['pool'];
+
+        $this->assertIsString($pool[0]['tile']);
+        $this->assertNull($pool[3]['tile']);
+    }
+
+    public function test_the_pool_comes_back_with_the_seat_that_took_every_position(): void
+    {
+        // The board's whole value on a television is showing WHO filled it, and a
+        // taker that did not survive the round trip is a brass seat number that
+        // changes every time the phone reads the game back — which it does before
+        // every single draw.
+        $game = $this->playedGame();
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        // Three draws, three seats, in ring order (TR-11).
+        $this->assertSame([1 => 1, 2 => 2, 3 => 3], $this->takersOf($reloaded));
+        $this->assertSame($this->takersOf($game), $this->takersOf($reloaded));
+
+        // And the projection carries them, which is the only reason they exist.
+        $pool = $this->projectionOf($reloaded)['pool'];
+
+        $this->assertSame([1, 2, 3], array_column(array_slice($pool, 0, 3), 'seat'));
+        $this->assertNull($pool[3]['seat']);
+    }
+
+    public function test_the_takers_are_stored_as_a_list_of_objects_and_never_as_a_map(): void
+    {
+        // A JSON object keyed by an integer comes back out of `json_decode` and
+        // out of `jsonb` with STRING keys — `"7"` and not `7` — so a pool stored
+        // as a map would not reload as the pool that was saved. It is a list of
+        // objects with an explicit `position`, the same shape `seats` and the
+        // projected `pool` already use, and an empty one is `[]` on both engines.
+        $this->playedGame();
+
+        /** @var array{tiles: list<string>, taken: list<array{position: int, seat: int}>} $stored */
+        $stored = json_decode((string) $this->gameRow()->pool, true);
+
+        $this->assertSame([0, 1, 2], array_keys($stored['taken']), 'The takers are a JSON list.');
+        $this->assertSame(['position' => 1, 'seat' => 1], $this->sorted($stored['taken'][0]));
+        $this->assertSame([2, 2], [$stored['taken'][1]['position'], $stored['taken'][1]['seat']]);
+
+        // The faces are still a plain list of strings in pool order.
+        $this->assertCount(49, $stored['tiles']);
+        $this->assertContainsOnlyString($stored['tiles']);
+    }
+
+    public function test_a_board_nobody_has_touched_stores_an_empty_list_of_takers(): void
+    {
+        // `{}` and `[]` are different values on both engines, and an empty map is
+        // what a taker keyed by position would have had to be given. A stage that
+        // has just been dealt holds 49 faces and no takers at all.
+        $game = $this->newlyStartedGame();
+
+        $this->repository()->save($game);
+
+        /** @var array{tiles: list<string>, taken: list<array{position: int, seat: int}>} $stored */
+        $stored = json_decode((string) $this->gameRow()->pool, true);
+
+        $this->assertSame([], $stored['taken']);
+        $this->assertStringContainsString('"taken":[]', (string) json_encode($stored));
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        $this->assertSame([], $reloaded->pool()->takers());
+        $this->assertSame(49, $reloaded->pool()->remaining());
+    }
+
+    public function test_the_shuffle_seed_is_stored_raw_and_reaches_no_projection(): void
+    {
+        // Stored raw and not hashed, because a shuffle that cannot be recomputed is
+        // a pool that cannot be read back — and read by nothing else (TR-09).
+        $game = $this->playedGame();
+
+        $this->assertSame(self::SEED, (string) $this->gameRow()->shuffle_seed);
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        $this->assertStringNotContainsString(
+            self::SEED,
+            (string) json_encode($this->projectionOf($reloaded)),
+        );
+    }
+
+    /**
+     * A game that has just started and has never been saved, on the same literal
+     * seed as the one this file stores: the board the seed deals, with no row
+     * involved.
+     */
+    private function newlyStartedGame(): Game
+    {
+        $game = Game::open(
+            GameId::fromString(self::GAME_ID),
+            JoinCode::fromString('K7QP3M'),
+            ControllerToken::generate(),
+            SeatRoster::fromNicknames(array_map(Nickname::fromString(...), ['Ana', 'Bea', 'Caro'])),
+            FrozenClock::at('2026-09-16 20:00:00'),
+            Seed::fromString(self::SEED),
+        );
+
+        $game->start(new TridentRuleSet, FrozenClock::at('2026-09-16 20:02:00'));
+
+        return $game;
+    }
+
+    /**
+     * @return list<string> every face of the pool, in pool order
+     */
+    private function facesOf(Game $game): array
+    {
+        return array_map(static fn (Tile $tile): string => $tile->value(), $game->pool()->tiles());
+    }
+
+    public function test_the_shuffle_seed_comes_back_as_the_board_it_deals(): void
+    {
+        // The column half of TR-31 is asserted above, against the literal. This is
+        // the other half, and it is the one that is live: `GameWriter` reads the
+        // game back from its row before every single draw, so a seed that did not
+        // survive the round trip deals a **different** board at the next stage
+        // boundary — 49 positions that disagree with the ones the table was
+        // looking at — and no column would look wrong afterwards.
+        $rules = new TridentRuleSet;
+        $clock = FrozenClock::at('2026-09-16 20:30:00');
+
+        $direct = $this->newlyStartedGame();
+        $opening = (string) $direct->stage()?->value();
+        $positions = [];
+
+        for ($position = 1; $position <= 49 && $direct->stage()?->value() === $opening; $position++) {
+            $direct->drawTile(PoolPosition::fromInt($position), $rules, $clock);
+            $positions[] = $position;
+        }
+
+        $this->assertNotSame($opening, $direct->stage()?->value(), 'The game crossed a stage boundary.');
+
+        // The same game and the same taps, reconstituted from its row before every
+        // one of them, which is exactly what a request does.
+        $this->repository()->save($this->newlyStartedGame());
+
+        foreach ($positions as $position) {
+            $reloaded = $this->repository()->find(GameId::fromString(self::GAME_ID));
+
+            $this->assertInstanceOf(Game::class, $reloaded);
+
+            $reloaded->drawTile(PoolPosition::fromInt($position), $rules, $clock);
+            $this->repository()->save($reloaded);
+        }
+
+        $viaRows = $this->repository()->find(GameId::fromString(self::GAME_ID));
+
+        $this->assertInstanceOf(Game::class, $viaRows);
+        $this->assertSame($direct->stage()?->value(), $viaRows->stage()?->value());
+        $this->assertSame(
+            $this->facesOf($direct),
+            $this->facesOf($viaRows),
+            'The next stage is dealt from the seed that was stored, position by position.',
+        );
+    }
+
+    public function test_the_effects_of_the_write_come_back_with_the_state(): void
+    {
+        // The seam's output has no column: it is the `effects` of the last entry
+        // of the log. Without the read half, a television that asks for the state
+        // it missed is told the board changed and never what the rules asked the
+        // table to do.
+        $game = $this->playedGame();
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        $this->assertNotSame([], $this->projectionOf($game)['effects'], 'That draw fired something.');
+        $this->assertSame(
+            (string) json_encode($this->projectionOf($game)['effects']),
+            (string) json_encode($this->projectionOf($reloaded)['effects']),
+            'Byte for byte, whichever path the client arrived by.',
+        );
+    }
+
+    public function test_tr_55_the_draw_log_is_rebuilt_from_the_move_rows_and_has_no_column(): void
+    {
+        // The history is a record, so it lives where records live. A column beside
+        // it would be a second copy that has to agree with the first.
+        $game = $this->playedGame();
+
+        $this->assertSame(
+            ['id', 'join_code', 'controller_token_hash', 'status', 'version', 'last_activity_at'],
+            array_slice(array_keys((array) $this->gameRow()), 0, 6),
+        );
+        $this->assertArrayNotHasKey('draw_log', (array) $this->gameRow());
+        $this->assertSame(3, DB::table('game_moves')->where('kind', 'tile_drawn')->count());
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        $this->assertSame($this->drawLogOf($game), $this->drawLogOf($reloaded));
+        // The cursor is the length of that log and is never a column of its own.
+        $this->assertSame(3, $reloaded->turnNumber());
+    }
+
+    public function test_a_game_that_has_not_started_stores_no_board_and_no_ruleset(): void
+    {
+        $this->seededGame();
+
+        $row = $this->gameRow();
+
+        $this->assertNull($row->rule_set_id);
+        $this->assertNull($row->stage);
+        $this->assertNull($row->current_seat);
+        $this->assertNull($row->pool);
+        $this->assertNull($row->rule_state);
+        $this->assertNull($row->pending_choice);
+        $this->assertNull($row->finish_reason);
+    }
+
+    public function test_an_empty_room_configuration_and_visit_map_are_stored_as_objects(): void
+    {
+        // Both columns hold a map, so empty is `{}` and never `[]`. `json_decode`
+        // tells the two apart on either engine, which a raw string comparison of
+        // what jsonb rendered would not.
+        $this->seededGame();
+
+        $row = $this->gameRow();
+
+        $this->assertSame('{}', (string) json_encode(json_decode((string) $row->room_config)));
+        $this->assertSame('{}', (string) json_encode(json_decode((string) $row->stage_visits)));
+    }
+
+    public function test_the_room_configuration_and_the_visit_map_round_trip_by_value(): void
+    {
+        $game = $this->playedGame();
+
+        $this->assertSame(
+            ['election' => 1],
+            json_decode((string) $this->gameRow()->stage_visits, true),
+        );
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        $this->assertSame(1, $reloaded->stageVisits('election'));
+        $this->assertSame(0, $reloaded->stageVisits('main'));
+        $this->assertSame(
+            'Drink with the person on your left',
+            $reloaded->roomConfig()->get('challenge.face.0'),
+        );
+        // Resolved once, when play began: every key the spec declares is present.
+        // The SET and not the order — `jsonb` keeps an object's keys in its own
+        // order, and the projection is what imposes one.
+        $keys = array_keys($reloaded->roomConfig()->toArray());
+        $declared = new TridentRuleSet()->roomConfigSpec()->keys();
+
+        sort($keys);
+        sort($declared);
+
+        $this->assertSame($declared, $keys);
+    }
+
+    public function test_the_rule_state_carries_its_version_across_the_round_trip(): void
+    {
+        // The framework owns exactly one key inside an otherwise opaque blob, and a
+        // blob that came back without it is corruption rather than version one.
+        $game = $this->playedGame();
+
+        $this->assertSame(['_v' => 1], json_decode((string) $this->gameRow()->rule_state, true));
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        $this->assertTrue($reloaded->ruleState()?->isAtVersion(TridentRuleSet::STATE_VERSION));
+        $this->assertSame($game->ruleState()?->toArray(), $reloaded->ruleState()?->toArray());
+    }
+
+    public function test_a_parked_question_and_a_finish_reason_survive_a_round_trip(): void
+    {
+        // `trident.v1` raises neither (TR-12, and it finishes on an exhausted pool),
+        // so the two columns are exercised through the aggregate's reconstruction
+        // port, which is the repository's own contract.
+        $game = $this->seededGame();
+
+        $this->repository()->save(Game::reconstitute(
+            $game->id(),
+            $game->joinCode(),
+            $game->controllerTokenHash(),
+            GameStatus::AWAITING_CHOICE,
+            $game->seats(),
+            $game->version()->next(),
+            new DateTimeImmutable('2026-09-16 20:30:00'),
+            $game->lastSequence(),
+            PlayState::of(
+                'house.v1',
+                Seed::fromString(self::SEED),
+                StageId::fromString('election'),
+                SeatNumber::fromInt(2),
+                TilePool::reconstitute(
+                    [Tile::fromString('33'), Tile::fromString('21')],
+                    [1 => SeatNumber::fromInt(3)],
+                ),
+                DrawLog::of([
+                    Draw::of('election', SeatNumber::first(), PoolPosition::first(), Tile::fromString('33')),
+                ]),
+                RuleState::initial(2),
+                RoomConfig::fromArray(['drawn_tiles.election' => 'keep']),
+                PendingChoice::of(SeatNumber::fromInt(2), 'choice.pick_one', ['choice.yes', 'choice.no']),
+                'rules_ended_game',
+                ['election' => 2],
+            ),
+        ));
+
+        $reloaded = $this->repository()->find($game->id());
+
+        $this->assertInstanceOf(Game::class, $reloaded);
+        $this->assertSame('house.v1', $reloaded->ruleSetId());
+        $this->assertSame(2, $reloaded->pendingChoice()?->seat()->value());
+        $this->assertSame('choice.pick_one', $reloaded->pendingChoice()?->promptKey());
+        $this->assertSame(['choice.yes', 'choice.no'], $reloaded->pendingChoice()?->options());
+        $this->assertSame('rules_ended_game', $reloaded->finishReason());
+        $this->assertSame(2, $reloaded->ruleState()?->version());
+        $this->assertSame(2, $reloaded->stageVisits('election'));
+        $this->assertSame([1 => 3], array_map(
+            static fn (SeatNumber $seat): int => $seat->value(),
+            $reloaded->pool()->takers(),
+        ));
+        $this->assertSame(2, $reloaded->pool()->count());
+        // The log came from `game_moves`, and this game's only row is its opening
+        // move: a `DrawLog` handed to `reconstitute()` is not what is read back.
+        $this->assertSame([], $this->drawLogOf($reloaded));
+        $this->assertSame(0, $reloaded->turnNumber());
+    }
+
+    public function test_no_column_of_the_games_table_names_a_rule(): void
+    {
+        // The declared success criterion of the seam: a new ruleset adds no
+        // migration. A column that spells a rule out is how that criterion dies.
+        $this->seededGame();
+
+        $columns = implode(' ', array_keys((array) $this->gameRow()));
+
+        foreach (['trident', 'challenge', 'election', 'drink', 'role', 'face', 'domino', 'tile'] as $rule) {
+            $this->assertStringNotContainsString($rule, $columns);
+        }
     }
 
     public function test_a_game_is_found_by_its_code_and_by_its_id(): void

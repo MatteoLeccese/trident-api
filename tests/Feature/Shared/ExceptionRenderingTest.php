@@ -8,6 +8,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -192,6 +193,31 @@ final class ExceptionRenderingTest extends TestCase
         $this->assertStringNotContainsString('SECRET-SENTINEL', $response->getContent());
         $this->assertStringNotContainsString('controller_token_hash', $response->getContent());
         $this->assertStringNotContainsString('password authentication', $response->getContent());
+    }
+
+    public function test_a_database_failure_never_writes_its_bindings_to_the_log(): void
+    {
+        // `QueryException` builds its message by interpolating the bindings into
+        // the statement, and every write of a game binds `games.shuffle_seed`.
+        // Logging the exception object therefore puts the one secret of the
+        // system (TR-09) in cleartext in storage/logs, where the body that the
+        // client never gets would have been useless anyway.
+        Log::spy();
+
+        $this->getJson('/api/v1/__test/query-ex')->assertStatus(500);
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->withArgs(function (string $message, array $context): bool {
+                // Once, and this once: the default reporter logs the exception's
+                // own message, which is the statement with its bindings in it.
+                $logged = $message.' '.(string) json_encode($context);
+
+                $this->assertStringNotContainsString('SECRET-SENTINEL', $logged);
+                $this->assertStringContainsString('controller_token_hash = ?', $logged, 'The statement is still there.');
+
+                return true;
+            });
     }
 
     public function test_debug_mode_never_puts_the_exception_message_on_the_wire(): void

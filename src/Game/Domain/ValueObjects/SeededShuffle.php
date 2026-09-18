@@ -53,21 +53,31 @@ final class SeededShuffle
     }
 
     /**
-     * A uniform index in `0..$bound - 1`.
+     * One word as a uniform index in `0..$bound - 1`, or null when the word falls
+     * in the rejection window and the caller has to draw another.
      *
      * Rejection sampling and not a bare modulo: `$word % $bound` favours the low
      * indices whenever `$bound` does not divide 2^32, which biases the first
-     * positions of the pool — the ones a game reaches soonest.
+     * positions of the pool — the ones a game reaches soonest. The window is 39
+     * words in 2^32 at a bound of 49, so no shuffle of a real deck ever shows
+     * this guard working; it is public so that it can be asserted at its
+     * boundary instead of through a permutation.
      */
-    private static function indexBelow(int $bound, Seed $seed, string $stream, int &$word): int
+    public static function indexOfWord(int $word, int $bound): ?int
     {
         $limit = intdiv(self::WORD_RANGE, $bound) * $bound;
 
-        while (true) {
-            $value = self::wordAt($word++, $seed, $stream);
+        return $word < $limit ? $word % $bound : null;
+    }
 
-            if ($value < $limit) {
-                return $value % $bound;
+    /** A uniform index in `0..$bound - 1`, drawing words until one is accepted. */
+    private static function indexBelow(int $bound, Seed $seed, string $stream, int &$word): int
+    {
+        while (true) {
+            $index = self::indexOfWord(self::wordAt($word++, $seed, $stream), $bound);
+
+            if ($index !== null) {
+                return $index;
             }
         }
     }

@@ -11,4 +11,8 @@ storage/framework/views/*
 !.env.example.*
 .phpunit.cache
 .phpunit.result.cache
-documentation
+# The conventions travel with the image: SpecificationCoverageTest reads
+# trident-rules.md and audits it against the tests, and the suite runs in the
+# image. Anything else under documentation/ stays out.
+documentation/*
+!documentation/conventions

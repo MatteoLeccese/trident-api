@@ -22,13 +22,26 @@ final class GameStatus
     /** In play. */
     public const RUNNING = 'running';
 
+    /**
+     * In play, and parked on a `PendingChoice` a named seat has to answer before
+     * anything else may happen.
+     *
+     * Not terminal: the game is still live, the channel is still open and the
+     * code is still valid. It exists because an `Outcome` can carry a choice, and
+     * a game that is waiting for one must refuse a draw — a state the framework
+     * cannot express as `running` without letting the next position be turned
+     * over while a rule is still mid-decision. `trident.v1` never reaches it
+     * (TR-12).
+     */
+    public const AWAITING_CHOICE = 'awaiting_choice';
+
     /** Finished as the rules dictate. */
     public const FINISHED = 'finished';
 
     /** Expired through inactivity, or abandoned. */
     public const ABANDONED = 'abandoned';
 
-    public const ALL = [self::LOBBY, self::RUNNING, self::FINISHED, self::ABANDONED];
+    public const ALL = [self::LOBBY, self::RUNNING, self::AWAITING_CHOICE, self::FINISHED, self::ABANDONED];
 
     private const TERMINAL = [self::FINISHED, self::ABANDONED];
 

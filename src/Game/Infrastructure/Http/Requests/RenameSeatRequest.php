@@ -15,6 +15,7 @@ final class RenameSeatRequest extends ApiFormRequest
     public function rules(): array
     {
         return [
+            ...self::WRITE_RULES,
             'nickname' => 'required|string',
         ];
     }
@@ -32,6 +33,12 @@ final class RenameSeatRequest extends ApiFormRequest
 
     public function toCommand(string $gameId, int $seat): RenameSeatCommand
     {
-        return new RenameSeatCommand($gameId, $seat, (string) $this->validated()['nickname']);
+        return new RenameSeatCommand(
+            $gameId,
+            $seat,
+            (string) $this->validated()['nickname'],
+            $this->expectedVersion(),
+            $this->requestId(),
+        );
     }
 }

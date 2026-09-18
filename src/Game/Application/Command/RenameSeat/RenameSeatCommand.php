@@ -12,5 +12,7 @@ final class RenameSeatCommand implements Command
         public readonly string $gameId,
         public readonly int $seat,
         public readonly string $nickname,
+        public readonly ?int $expectedVersion = null,
+        public readonly ?string $requestId = null,
     ) {}
 }

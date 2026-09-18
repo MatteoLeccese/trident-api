@@ -16,9 +16,16 @@ es una regla; qué dice el reto es un ajuste.** Cuántos retos dispara una ficha
 apuntan lo decide el ruleset (TR-38, TR-39, TR-44, TR-47). Las frases las escribe la sala, y
 reescribirlas todas no cambia una sola cogida (TR-53).
 
-Debajo de las dos hay una tercera capa: la **presentación**, que vive entera en el cliente y no llega
-a la API. Cómo se dibuja una posición cogida, la animación de volteo y la transición de traspaso del
-móvil son presentación.
+Debajo de las dos hay una tercera capa: la **presentación**. Casi toda vive en el cliente y no llega
+a la API: el aspecto de una posición cogida, la animación de volteo y la transición de traspaso del
+móvil son presentación y no tienen clave de ninguna clase.
+
+La excepción es una presentación que **la mesa elige**, y ésa sí cruza el cable — resuelta. Si la
+decisión se dejara en el cliente, un fichero de React tendría que construir `"drawn_tiles." + stage`
+para saber qué dibujar, y **una clave que nombra un stage es una regla viviendo en el cliente**. Así
+que la resuelve la proyección: el ruleset contesta `boardPresence()` por stage, la proyección la
+emite como el booleano `on_board` de cada posición, y el cliente ramifica sobre un campo del
+framework sin nombrar el ajuste, el stage ni la regla.
 
 ## El espacio de claves es plano y punteado
 
@@ -52,7 +59,7 @@ reto.
 | Clave | Tipo | Default | Qué gobierna |
 |---|---|---|---|
 | `challenge.face.0` … `challenge.face.6` | `text`, tope 80 | **lo entrega el autor** | lo que la aplicación anuncia por cada cara que sale |
-| `drawn_tiles.<stageId>` | `choice`, `keep` \| `remove` | `keep` en `election`, `remove` en `main` | si una ficha cogida se queda volteada en el tablero o se retira de la vista |
+| `drawn_tiles.<stageId>` | `choice`, `keep` \| `remove` | `keep` en `election`, `remove` en `main` | si una ficha cogida se queda volteada en el tablero o se retira de la vista; se resuelve en la proyección y llega al cliente como `on_board` |
 
 **Los siete textos por defecto los entrega el autor** (TR-53). Hasta que los entrega, las constantes de
 `trident.v1` llevan marcadores en inglés de la forma y la longitud correctas: son marcadores nuestros,
@@ -66,9 +73,28 @@ castellano entre seis en inglés se lee como un descuido y no como una entrega.
 Ninguna de las dos familias es una regla:
 
 - `drawn_tiles.*` es **presentación gobernada por un ajuste** (TR-52). Una posición cogida no se puede
-  volver a coger con ninguno de los dos valores, y el snapshot emite **los mismos bytes** con ambos:
-  lo único que cambia es si el tablero la sigue dibujando volteada o deja un hueco inerte que conserva
-  la geometría. Ningún PHP de dominio lo lee.
+  volver a coger con ninguno de los dos valores y el resultado de la partida es idéntico: lo único que
+  cambia es si el tablero la sigue dibujando volteada o deja un hueco inerte que conserva la
+  geometría.
+
+  **Corrige lo que este documento afirmaba antes:** el snapshot **no** emite los mismos bytes con los
+  dos valores, y no puede emitirlos. Cada posición del `pool` lleva `on_board`, que es `false` en una
+  posición cogida que el tablero deja de dibujar, y ése es el único byte que cambia —la cara, el
+  asiento que la cogió y `taken` son los mismos—. La versión anterior dejaba la decisión en el
+  cliente, que para tomarla habría tenido que componer `"drawn_tiles." + stage`: un fichero de React
+  nombrando el stage de una regla, que es justo lo que prohíbe *"una regla sólo puede vivir detrás de
+  `RuleSet`, y eso incluye al cliente"* de [`rule-set-seam.md`](rule-set-seam.md). **Cuando una
+  convención contradice esa regla, es la convención la que cede**, y queda escrito aquí en vez de
+  taparse.
+
+  Quién lo lee: **el ruleset y nadie más.** `RuleSet::boardPresence(GameContext): string` devuelve
+  `taken_stays_on_board` o `taken_leaves_board` —vocabulario cerrado del framework, ver
+  [`rule-set-seam.md`](rule-set-seam.md)—, y `trident.v1` lo contesta leyendo su propia clave del
+  stage en juego. El framework no interpreta el ajuste: transporta el booleano. Y la clave la compone
+  el ruleset porque es su vocabulario: un `StageId` es un string opaco que sólo él entiende.
+
+  Lo pinta `tests/Feature/Game/GamePlayEndpointsTest.php`, que juega los dos valores por las rutas
+  reales y afirma que los dos tableros son distintos.
 - `challenge.*` es **contenido**. El ruleset decide qué reto se dispara; el texto es de la mesa. Beber
   es el contenido por defecto, no el mecanismo: un grupo que quiera usar la idea para otra cosa
   reescribe las siete cajas. No hay "packs" ni selector de packs.

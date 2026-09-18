@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Src\Game\Application\Query\GetGameState;
 
 use InvalidArgumentException;
+use Src\Game\Application\Service\GameProjector;
 use Src\Game\Domain\Exceptions\GameNotFoundException;
 use Src\Game\Domain\Model\GameSnapshot;
 use Src\Game\Domain\Repository\GameRepository;
@@ -17,7 +18,10 @@ use Src\Game\Domain\ValueObjects\GameId;
  */
 final class GetGameStateHandler
 {
-    public function __construct(private readonly GameRepository $games) {}
+    public function __construct(
+        private readonly GameRepository $games,
+        private readonly GameProjector $projector,
+    ) {}
 
     public function handle(GetGameStateQuery $query): GameSnapshot
     {
@@ -29,6 +33,6 @@ final class GetGameStateHandler
 
         $game = $this->games->find($id) ?? throw new GameNotFoundException;
 
-        return $game->snapshot();
+        return $this->projector->project($game);
     }
 }

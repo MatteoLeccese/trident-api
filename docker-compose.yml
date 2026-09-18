@@ -9,7 +9,7 @@
 # The suite runs in the image, never on the host, and on either engine:
 #
 #   docker build --target test -t trident-api:test . && docker run --rm trident-api:test
-#   docker compose run --rm test
+#   docker compose run --rm --build test
 #
 # Everything binds to 0.0.0.0 so a phone and a television on the same wifi can
 # reach it by this machine's LAN address.
@@ -145,8 +145,11 @@ services:
   # The suite against the engine production uses. It does not start with
   # `docker compose up`: it carries a profile, so it runs only when asked.
   #
-  #   docker compose run --rm test                     # whole suite on Postgres
-  #   docker compose run --rm test --filter=GameTest   # one class
+  #   docker compose run --rm --build test                     # whole suite on Postgres
+  #   docker compose run --rm --build test --filter=GameTest   # one class
+  #
+  # `--build` is not optional: compose keeps its own image for this service, so
+  # without it the run reports on source you have already changed.
   #
   # Its own database, never the one the stack serves: every test migrates from
   # empty, so pointing this at `trident` would wipe the table you are playing on.

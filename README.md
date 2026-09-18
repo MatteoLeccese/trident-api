@@ -57,9 +57,12 @@ reads your `.env`.
 
 ```bash
 docker compose up -d postgres
-docker compose run --rm test                           # PostgreSQL
-docker compose run --rm test --filter=GameTest
+docker compose run --rm --build test                   # PostgreSQL
+docker compose run --rm --build test --filter=GameTest
 ```
+
+`--build` is not optional. Compose keeps its own image for this service, so
+without it you get a green suite for source you have already changed.
 
 Run it on PostgreSQL before trusting anything that touches persistence. SQLite
 cannot see how `jsonb` normalises what you stored, what `timestamptz` does to an

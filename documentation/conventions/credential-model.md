@@ -24,7 +24,10 @@ es pública por definición.
   BFF de Next lo consume y lo quita antes de que la respuesta llegue al JS del navegador**,
   escribiéndolo en la cookie `trident_controller` (`httpOnly`, `secure` en producción,
   `sameSite=lax`). `play-again` **rota** la cookie: el token de la partida anterior deja de escribir
-  en cuanto existe la nueva.
+  en cuanto existe la nueva. Por eso la API **cierra** esa partida en la misma unidad de trabajo que
+  abre la siguiente: su token ya no existe en ningún sitio salvo como hash, ninguna ruta lo vuelve a
+  emitir, y dejarla viva sería dejar una partida que nadie puede escribir ocupando su `JoinCode` hasta
+  que expire.
 - Por eso ninguna de esas dos puede pasar por el proxy genérico `/api/proxy/[...path]`, que devuelve
   el cuerpo del backend tal cual y entregaría el token al navegador. Cada una tiene su propia ruta de
   BFF —`/api/games` y `/api/games/[gameId]/play-again`— con el mismo trabajo: guardar el token en la

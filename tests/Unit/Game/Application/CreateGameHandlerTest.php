@@ -7,6 +7,7 @@ namespace Tests\Unit\Game\Application;
 use PHPUnit\Framework\TestCase;
 use Src\Game\Application\Command\CreateGame\CreateGameCommand;
 use Src\Game\Application\Command\CreateGame\CreateGameHandler;
+use Src\Game\Application\Service\JoinCodeMint;
 use Src\Game\Domain\Exceptions\NicknameTakenException;
 use Src\Game\Domain\Exceptions\RosterSizeException;
 use Src\Game\Domain\ValueObjects\GameId;
@@ -14,6 +15,7 @@ use Src\Game\Domain\ValueObjects\GameStatus;
 use Src\Shared\Infrastructure\Service\FrozenClock;
 use Tests\Doubles\InMemoryGameRepository;
 use Tests\Doubles\SpyGameStatePublisher;
+use Tests\Support\GameProjectorFactory;
 
 final class CreateGameHandlerTest extends TestCase
 {
@@ -36,6 +38,8 @@ final class CreateGameHandlerTest extends TestCase
             $this->games,
             $this->publisher,
             FrozenClock::at('2026-09-16 20:00:00'),
+            GameProjectorFactory::make(),
+            new JoinCodeMint($this->games),
         );
 
         return $handler->handle(new CreateGameCommand($nicknames));

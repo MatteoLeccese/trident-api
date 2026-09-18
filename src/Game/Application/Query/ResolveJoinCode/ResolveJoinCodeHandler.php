@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Src\Game\Application\Query\ResolveJoinCode;
 
 use InvalidArgumentException;
+use Src\Game\Application\Service\GameProjector;
 use Src\Game\Domain\Exceptions\GameNotFoundException;
 use Src\Game\Domain\Model\GameSnapshot;
 use Src\Game\Domain\Repository\GameRepository;
@@ -15,7 +16,10 @@ use Src\Game\Domain\ValueObjects\JoinCode;
  */
 final class ResolveJoinCodeHandler
 {
-    public function __construct(private readonly GameRepository $games) {}
+    public function __construct(
+        private readonly GameRepository $games,
+        private readonly GameProjector $projector,
+    ) {}
 
     public function handle(ResolveJoinCodeQuery $query): GameSnapshot
     {
@@ -29,6 +33,6 @@ final class ResolveJoinCodeHandler
 
         $game = $this->games->findByJoinCode($code) ?? throw new GameNotFoundException;
 
-        return $game->snapshot();
+        return $this->projector->project($game);
     }
 }

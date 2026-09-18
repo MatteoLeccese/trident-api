@@ -23,8 +23,24 @@ Consecuencias que conviene tener delante al escribir código:
 - **Entre los 49 pares ordenados hay exactamente un `'33'`** (TR-03), y de ahí sale toda la aritmética
   de la elección: está en [`trident-rules.md`](trident-rules.md) §10 y no se recalcula en otro sitio.
 
-`TileDeck::standard()` es el **único** sitio que construye el conjunto, en orden fijo. La
+`TileDeck::standard()` es el **único** sitio que construye **este** conjunto, en orden fijo. La
 aleatoriedad es del barajado, para que una semilla dada produzca siempre la misma partida.
+
+**El alfabeto de las caras es del formato de cable, no del juego.** `Tile` acepta cualquier dígito
+decimal por cara —el valor persistido sigue siendo la cadena de dos caracteres de TR-02— y qué caras
+se reparten de verdad lo decide el mazo que devuelve `RuleSet::deck()`, igual que cuántas fichas hay.
+`TileDeck::standard()` construye el conjunto doble-seis desde su propia constante
+`STANDARD_MAX_FACE`, y `trident.v1` declara la suya, `TridentRuleSet::MAX_FACE`, de la que salen las
+siete claves de reto de TR-43. Si el tope viviese en `Tile`, subirlo para permitir un doble-nueve le
+daría diez retos a partidas ya fijadas a `trident.v1`: una regla de un ruleset no puede ser función de
+una constante del framework.
+
+`TileDeck::of(Tile ...$tiles)` construye cualquier otro. Existe porque `RuleSet::deck()` devuelve un
+`TileDeck` y el tamaño del pool es una decisión del ruleset: una clase cuyo único constructor fuese
+las 49 de TR-01 sería esa regla horneada en un objeto de valor del framework. Admite repetidas —la
+identidad de una cogida es `(stage, posición)` (TR-04)— y rechaza el mazo vacío, porque un stage sin
+posiciones no admite ninguna cogida y por tanto ningún `Outcome` que mueva la partida: colgaría una
+mesa en vez de terminarla.
 
 ## El mazo no es el pool
 

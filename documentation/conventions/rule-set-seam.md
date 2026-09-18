@@ -31,14 +31,19 @@ interface RuleSet {
     public function stages(): StageSequence;          // StageId[] ordenados + etiquetas humanas
     public function deck(GameContext $c): TileDeck;
     public function visibility(GameContext $c): Visibility;
+    public function boardPresence(GameContext $c): BoardPresence;
     public function roomConfigSpec(): RoomConfigSpec;
     public function onGameStarted(GameContext $c): Outcome;
     public function onTileDrawn(DrawContext $c): Outcome;
+    public function onChoiceMade(ChoiceContext $c): Outcome;   // añadido por el doble hostil
 }
 ```
 
-Ocho métodos y **dos** entradas de ejecución. **No hay `isStageComplete`, `onStageComplete` ni
-`isFinished`**, y no deben añadirse: `Outcome.nextStage` y `Outcome.finished` ya expresan cada
+Diez métodos y **tres** entradas de ejecución. La tercera, `onChoiceMade`, **no estaba en la costura
+tal como se escribió**: la añadió el doble hostil, porque un `Outcome` puede aparcar la partida en un
+`PendingChoice` y una respuesta que no vuelve a entrar por ninguna parte la aparca para siempre.
+`trident.v1` no devuelve ninguna (TR-12) y trata una llamada ahí como incidente. **No hay
+`isStageComplete`, `onStageComplete` ni `isFinished`**, y no deben añadirse: `Outcome.nextStage` y `Outcome.finished` ya expresan cada
 transición dirigida por reglas —TR-18 y TR-34 son exactamente esos dos campos— y dos caminos para un
 mismo cambio de estado son dos caminos que pueden discrepar. Ninguna transición la dispara un reloj
 —ninguna pantalla lleva temporizador y todo avanza con un toque humano— y la única transición temporal
@@ -49,11 +54,12 @@ El rebarajado y el asiento de apertura del stage siguiente no son métodos: el f
 `nextStage` pidiendo `deck()` otra vez (TR-31), y el asiento lo fija `Outcome.overrideNextSeat`
 (TR-32).
 
-`deck()` y `visibility()` reciben `GameContext` y no un `StageId` pelado. Un ruleset puede querer
-dimensionar el mazo a la mesa, o abrir el resto del tablero cuando el `RuleState` dice que ya ha
-pasado algo; estrechar la entrada obligaría a inventar un stage falso para expresar esas reglas, que
-es el framework dictando la forma de una regla. `trident.v1` no ejerce ninguna de las dos (TR-05,
-TR-07), y la firma vale igual: la costura la fija el peor ruleset que tenga que aceptar, no el único
+`deck()`, `visibility()` y `boardPresence()` reciben `GameContext` y no un `StageId` pelado. Un
+ruleset puede querer dimensionar el mazo a la mesa, abrir el resto del tablero cuando el `RuleState`
+dice que ya ha pasado algo, o leer un ajuste que escribió la mesa; estrechar la entrada obligaría a
+inventar un stage falso para expresar esas reglas, que es el framework dictando la forma de una
+regla. `trident.v1` no ejerce las dos primeras (TR-05, TR-07) y sí la tercera (TR-52), y la firma
+vale igual en los tres casos: la costura la fija el peor ruleset que tenga que aceptar, no el único
 que hay.
 
 El agregado valida sólo lo que **él** posee — la partida está en `running`, hay un `current_seat`, la
@@ -93,9 +99,9 @@ DrawContext {
 - `GameContext.currentSeat` es **nulable**: `onGameStarted` corre antes de que exista cursor (TR-17).
   Un tipo no nulable obligaría a inventar un asiento cero para el único momento en que aún no hay
   ninguno.
-- `GameContext.priorDraws` va siempre, aunque el contexto no sea el de una cogida. `deck()` y
-  `visibility()` son los dos sitios donde una regla puede depender de lo ya salido, y sin ese campo
-  tendrían que inventarse un stage para acordarse.
+- `GameContext.priorDraws` va siempre, aunque el contexto no sea el de una cogida. `deck()`,
+  `visibility()` y `boardPresence()` son los sitios donde una regla puede depender de lo ya salido, y
+  sin ese campo tendrían que inventarse un stage para acordarse.
 - `DrawContext` lleva **posición y ficha**: la posición es lo que el móvil toca, la ficha es lo que el
   servidor descubre al voltearla. `trident.v1` decide con la ficha —las dos caras de TR-38 y el `3|3`
   de TR-24—, y otra regla puede mirar la posición: *"la última casilla que queda"* es tan regla como
@@ -142,6 +148,22 @@ negocian:
   `broadcastWith()` —el objeto contra sí mismo, sin emitir ninguna petición HTTP—. Falta
   `tests/Feature/Game/SnapshotDeliveryParityTest.php`, que emite `GET /api/v1/games/{gameId}` de
   verdad y compara el `data` del sobre con `broadcastWith()`.
+`RuleSet::boardPresence(GameContext $c): BoardPresence` es su hermana, con la misma forma y por las
+mismas razones: `final class` de constantes del framework, `taken_stays_on_board` y
+`taken_leaves_board`, nunca un booleano, respondida **por stage y jamás por espectador**. Lo que
+contesta **no es una regla**: los dos valores juegan exactamente la misma partida, así que un ruleset
+puede contestarla desde un ajuste que él mismo declaró, y `trident.v1` lo hace (TR-52). Vive en la
+costura porque la clave de ese ajuste es vocabulario del ruleset: resolverla en el cliente obligaría a
+un fichero de React a componer `"drawn_tiles." + stage`, que es una regla en el cliente. La proyección
+la emite como `on_board` por posición, y el argumento completo está en
+[`room-config.md`](room-config.md).
+
+**El pool proyecta además quién cogió cada posición** —`seat`, y `null` mientras nadie la ha cogido—,
+que es lo que permite a un televisor pintar quién llenó el tablero sin contar un punto. Eso **no es
+una regla y no entra en la costura**: no está en `GameContext` ni en `DrawContext`, porque lo que una
+regla lee de lo ya ocurrido es el `DrawLog`. Es contabilidad del framework, del pool a la proyección y
+a ningún otro sitio.
+
 - **La semilla no sale nunca** (TR-09). `games.shuffle_seed` es secreto de servidor: no va en el
   snapshot, ni en un payload de movimiento, ni en un cuerpo de error, ni cuando la partida termina, y
   no se acepta como campo de petición. El barajado es Fisher-Yates sobre un flujo de bytes de
@@ -153,7 +175,22 @@ negocian:
 ## La salida es un vocabulario cerrado
 
 `Outcome`: `Effect[] $effects`, `?SeatNumber $overrideNextSeat`, `?StageId $nextStage`,
-`array $ruleStatePatch`, `bool $finished`, `?FinishReason $reason`.
+`?PendingChoice $pendingChoice`, `array $ruleStatePatch`, `bool $finished`, `?FinishReason $reason`.
+
+`PendingChoice` lleva **un asiento** —nunca nulo: "toda la mesa" no tiene una respuesta que esperar—,
+una clave de mensaje y la lista cerrada de respuestas, que son también claves de mensaje de la copia
+que trae la aplicación. Un botón sobre el que el framework aparca una partida no se pinta con texto
+que escribió la sala. Mientras hay una pendiente el `status` es `awaiting_choice`, ninguna posición se
+puede voltear, y **el cursor no se mueve**: el turno no ha terminado hasta que se responde.
+`pendingChoice` y `finished` se excluyen en los dos sentidos, y `pendingChoice` y `overrideNextSeat`
+también: el cursor no se mueve mientras hay una pregunta abierta, así que un asiento nombrado junto a
+ella sólo podría aplicarse después de la respuesta, y el `Outcome` de la respuesta es donde el ruleset
+dice quién juega. Las tres parejas contradictorias se rechazan en la costura; ninguna se descarta en
+silencio en el framework.
+
+`FinishReason` tiene una tercera constante, `RULES_ENDED_GAME`, por la misma razón: las otras dos son
+afirmaciones concretas, y un ruleset que se niega a jugar una mesa tendría que mentir con una de
+ellas. Ninguna implementación de producción la emite.
 
 `Effect` es **declarativo y cerrado**, y la UI lo pinta sin conocer ninguna regla. Se persiste como
 jsonb en `game_moves.payload`:
@@ -194,6 +231,11 @@ Tres reglas sobre este vocabulario:
   efecto que además moviera el cursor sería una segunda fuente de verdad sobre quién juega. Si el
   salto hay que anunciarlo, se anuncia con `announce`.
 
+**Los efectos llegan al cliente dentro de la única proyección**, en su campo `effects`, y no por una
+segunda ruta ni por un feed aparte: son los de la escritura de la que salió esa versión, se reconstruyen
+del log al leer la partida de su fila, y su sitio exacto lo fija
+[`state-versioning.md`](state-versioning.md).
+
 **Por eso las reglas son enchufables con cero migraciones:** una regla sorprendente llega como una
 constante nueva de `EffectKind` más una rama en `EffectBanner.tsx`. Nunca un `ALTER TABLE`.
 
@@ -209,7 +251,7 @@ la partida?**
 |---|---|---|
 | **Regla** | `RuleSet` | qué ficha te hace trident; cuándo acaba un stage; si las caras sin coger están ocultas; a quién apunta el reto de la cara 3 |
 | **Ajuste de sala** | `RoomConfig`, declarado por `RuleSet::roomConfigSpec()` y escrito por la mesa | el texto de cada reto; si las fichas cogidas se retiran del tablero |
-| **Presentación** | el cliente | cómo se dibuja una posición cogida; la animación de volteo; la transición de traspaso del móvil |
+| **Presentación** | el cliente, salvo la que la mesa elige, que la resuelve la proyección | el aspecto de una posición cogida, la animación de volteo y la transición de traspaso son del cliente; si una posición cogida sigue en el tablero lo resuelve `boardPresence()` y viaja como `on_board` |
 
 Un ajuste **no es una regla**: el ruleset declara qué ajustes existen y puede leerlos, el framework
 nunca los interpreta, y la base de datos los guarda como un blob opaco. Quién valida, qué pasa con una
@@ -223,11 +265,17 @@ que se anuncian las escribe la sala (TR-43, TR-53).
 
 El error de capa más fácil de cometer: *"las fichas cogidas se quitan del tablero"* **no es
 visibilidad**. Una posición cogida no se puede volver a coger en ninguno de los dos modos y el
-snapshot emite los mismos bytes con ambos, así que no cambia ni el resultado ni los datos: es
-presentación, gobernada por un ajuste. El **valor por defecto por stage** sí lo pone el ruleset
-(TR-52) porque depende del stage, y un `StageId` es un string opaco que sólo el ruleset entiende. La
-sala **sobrescribe** ese default; no lo inventa, y ningún fichero del cliente contiene el nombre de un
-stage.
+resultado de la partida es idéntico: es presentación, gobernada por un ajuste. El **valor por defecto
+por stage** lo pone el ruleset (TR-52) porque depende del stage, y un `StageId` es un string opaco que
+sólo el ruleset entiende. La sala **sobrescribe** ese default; no lo inventa, y ningún fichero del
+cliente contiene el nombre de un stage.
+
+**Corrección de lo que esta sección afirmaba antes:** decía que el snapshot emite *los mismos bytes*
+con los dos valores y que sólo cambia lo que el tablero dibuja. Eso ponía la decisión en el cliente, y
+la única forma de tomarla ahí es componer la clave del stage — una regla en un fichero de React. La
+decisión se resuelve en la proyección: el snapshot **sí** cambia, en el `on_board` de cada posición y
+en nada más. Un ajuste que no cambiase ningún byte sería un ajuste que ninguna pantalla puede honrar
+sin conocer una regla, o un ajuste que no hace nada.
 
 ## El estado opaco va versionado; la configuración de sala no
 
@@ -238,6 +286,12 @@ escrito por una versión anterior de sí mismo y no puede migrarlo **termina la 
 `trident.v1` devuelve `stateVersion() = 1` y no guarda nada más allá de `_v` (TR-19), así que hoy ese
 camino no lo ejercita ninguna partida real: lo ejercita el doble hostil, que es justamente el motivo
 de que exista.
+
+**Un hueco de versión tiene exactamente una salida.** Ningún miembro de `Outcome` lleva un estado
+migrado y `RuleState` no tiene con qué reestampar el suyo: o el ruleset entiende el blob que lee, o
+termina la partida. Dar esa capacidad es añadir a la vez el miembro del `Outcome` y el paso del
+framework que lo aplica; que el framework reestampe `_v` en cada escritura, en cambio, es justo el
+ascenso silencioso contra el que existe la guarda.
 
 Evolucionar clases sobre jsonb opaco es un camino clásico de corrupción silenciosa; esto es la
 guarda de dos líneas contra él.
@@ -303,10 +357,74 @@ Una implementación hostil que tiene que **ejecutarse de verdad**, no. Si no pue
 se arregla **antes de que exista una segunda implementación**, mientras no hay ninguna partida jugada
 que migrar.
 
-La forma esperada de ese arreglo: `Outcome` gana un `PendingChoice` y `status` gana `awaiting_choice`.
-Presupuestada una tarde. **No se construye por adelantado:** ninguna regla del juego pide la
-intervención de otro jugador (TR-12, TR-13), así que construirlo antes de que el ruleset hostil lo
-exija es el código especulativo que este proyecto prohíbe.
+### Lo que el ejercicio encontró
+
+Los ocho esfuerzos corren. Tres de ellos obligaron a cambiar la costura, y los tres cambios están
+hechos:
+
+1. **`Outcome` gana `PendingChoice` y `status` gana `awaiting_choice`**, como este documento
+   preveía — **más una tercera entrada de ejecución, `onChoiceMade(ChoiceContext)`, que no preveía**.
+   Sin ella la respuesta no vuelve a las reglas por ningún sitio.
+2. **`TileDeck::of(Tile ...$tiles)`**: `deck()` devolvía un `TileDeck` cuyo único constructor era
+   `standard()`, así que ningún ruleset podía devolver un mazo distinto de las 49 de TR-01. El
+   esfuerzo 3 era imposible de escribir, no sólo de pasar.
+3. **`FinishReason::RULES_ENDED_GAME`**: el esfuerzo 5 termina una partida de cero cogidas y las dos
+   razones existentes habrían sido falsas.
+
+Y una regla del **framework** que el ejercicio hizo visible y que el agregado tiene que cumplir: el
+flujo del barajado de un stage es su id en la primera visita —lo que TR-31 fija— y lleva `#n` a partir
+de la segunda. Sin eso, un `nextStage` que apunta hacia atrás reparte el pool idéntico en el orden
+idéntico desde la única `games.shuffle_seed`.
+
+El bucle del framework ya **es el agregado**. `Game` tiene `start()`, `drawTile()`,
+`answerChoice()`, `configureRoom()` y `reorderSeats()`, y con ellos el estado que el bucle necesita:
+`rule_set_id`, stage, asiento actual, pool, semilla, rule state, room config y las visitas por stage.
+`tests/Unit/Game/Doubles/RuleDriver.php` ya no decide nada: es una conveniencia de test —semilla
+literal, reloj congelado, llamada encadenable, posiciones como enteros— alrededor de `Game`, y
+`ArchitectureTest::test_the_framework_loop_lives_in_exactly_one_class` falla si aparece un segundo
+llamador que materialice un pool o mueva el cursor.
+
+El estado de juego ya persiste y ya se proyecta. Una sola migración añade a `games` el
+`rule_set_id`, la semilla, el stage, el asiento actual, el pool, el `rule_state`, el `room_config`,
+las visitas por stage, la elección pendiente y la razón de fin; `EloquentGameRepository` las escribe y
+las reconstituye, y el `DrawLog` sigue sin columna: se rehace de las filas `tile_drawn` de
+`game_moves`. El snapshot lleva stage, asiento actual, pool proyectado por `visibility()` y por
+`boardPresence()`, `room_config` y `tv_idle_notice_minutes`, y nunca la semilla.
+
+Tres cosas que el ejercicio de persistencia hizo visibles y que quedan fijadas:
+
+- **`jsonb` no conserva el orden de las claves de un objeto** —las ordena por longitud y luego por
+  bytes—, así que una partida releída de una fila traía el `room_config` en otro orden que el agregado
+  recién emitido. El orden de un mapa no es información: la proyección lo impone (`ksort`), y por eso
+  las dos rutas siguen siendo los mismos bytes en PostgreSQL y en SQLite.
+- **El mapa vacío se emite como `{}` y nunca como `[]`.** El cliente lo tipa como mapa, y por eso la
+  paridad se afirma sobre el cuerpo crudo de la respuesta y no sobre su decodificación, que es justo
+  el paso que borra esa diferencia.
+- **Un objeto indexado por un entero no vuelve como el que se guardó.** `games.pool` guarda quién
+  cogió cada posición, y lo guarda como **lista de objetos** con un `position` explícito —la misma
+  forma que `seats` y que el `pool` proyectado—, no como mapa `posición → asiento`: `json_decode` y
+  `jsonb` devuelven las claves de un objeto como cadenas, así que `7` vuelve como `"7"` y el pool
+  releído no sería el guardado sin un cast en cada lector. La lista vacía es además `[]` en los dos
+  motores, sin el `(object)` que un mapa vacío habría necesitado. Lo afirma
+  `tests/Feature/Game/EloquentGameRepositoryTest.php`, que es el único sitio donde la persistencia se
+  ejercita de verdad, contra la columna cruda y contra el round trip.
+
+Las rutas ya llegan al ruleset. Arranque, cogida, configuración de sala, reordenación y revancha
+entran por `GameController` y por los handlers reales, y
+`tests/Feature/Game/HostileSeamOverHttpTest.php` corre el hostil por ahí cambiando el **registro** de
+rulesets y con qué id nace una partida nueva —que es exactamente el cambio que sería una variante de
+la casa—, sin tocar una ruta ni una regla. Cuatro de los ocho esfuerzos llegan a una ruta: el mazo que
+no es de 49, la mesa que la variante se niega a jugar, el turno aparcado en una pregunta y el
+formulario generado con las claves de la variante.
+
+Lo que **no** se puede afirmar todavía: los otros cuatro siguen corriendo sólo por el agregado, y tres
+de ellos cuelgan de lo mismo. **Ninguna ruta llega a `answerChoice()`**, y el hostil aparca su primera
+cogida de `alpha` en una pregunta, así que por HTTP la partida no pasa de ahí: la respuesta, el
+`nextStage` hacia atrás y el `overrideNextSeat` que repite asiento quedan detrás de esa puerta. El
+octavo —una segunda clase con el mismo `id()`— exige registrar dos rulesets bajo un id, que
+`RuleSetResolver` prohíbe por construcción. `trident.v1` no devuelve ninguna pregunta (TR-12), así que
+la ruta que falta no tiene hoy ningún consumidor de producción: entra con el ruleset que la necesite,
+con su fila en el barredor de mutaciones en el mismo commit.
 
 ## Criterio de éxito, declarado por adelantado
 
@@ -315,3 +433,10 @@ exija es el código especulativo que este proyecto prohíbe.
 
 Cualquier otra cosa es un **fallo de diseño de esta costura**, y se registra aquí con su causa. No se
 tapa.
+
+Primera medición del criterio con un cambio de forma de regla ya en marcha: el tablero pasó a llevar
+**quién cogió cada posición** y a resolver **la presentación de una posición cogida** (TR-52). Eso
+tocó el `TilePool`, la proyección, el interfaz —un décimo método— y la forma de lo que vive **dentro**
+de `games.pool`, que es `jsonb`. `git diff --stat database/migrations/` sigue vacío: la forma del pool
+cambió dentro de una columna que la base de datos no lee ni indexa, que es exactamente lo que ese
+criterio compra.

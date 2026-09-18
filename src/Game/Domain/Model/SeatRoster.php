@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Src\Game\Domain\Model;
 
+use Src\Game\Domain\Exceptions\InvalidSeatOrderException;
 use Src\Game\Domain\Exceptions\NicknameTakenException;
 use Src\Game\Domain\Exceptions\RosterSizeException;
 use Src\Game\Domain\Exceptions\SeatNotFoundException;
@@ -118,6 +119,70 @@ final class SeatRoster
         }
 
         return new self($renamed);
+    }
+
+    /**
+     * The same table in a new order, addressed by an **absolute permutation**:
+     * the seat numbered `$order[0]` today becomes seat 1, `$order[1]` becomes
+     * seat 2, and so on. A drag produces one intention and many frames, and an
+     * intention that names the arrangement it wants is the one a repeated frame
+     * cannot compound.
+     *
+     * The list has to name every seat of the table exactly once, so contiguity
+     * and the set of names survive by construction and the three invariants of
+     * this class are the same afterwards.
+     *
+     * @param  list<SeatNumber>  $order
+     */
+    public function reorder(array $order): self
+    {
+        $order = array_values($order);
+
+        if (count($order) !== count($this->seats)) {
+            throw new InvalidSeatOrderException(sprintf(
+                'This table has %d seats and the order names %d.',
+                count($this->seats),
+                count($order),
+            ));
+        }
+
+        $seen = [];
+        $reordered = [];
+
+        foreach ($order as $index => $number) {
+            if (isset($seen[$number->value()])) {
+                throw new InvalidSeatOrderException("Seat {$number->value()} is named twice in that order.");
+            }
+
+            $seen[$number->value()] = true;
+
+            // `at()` refuses a number this table does not have, so an order that
+            // names a seat nobody holds is rejected before anything is built.
+            $reordered[] = $this->at($number)->renumberedTo(SeatNumber::fromInt($index + 1));
+        }
+
+        return new self($reordered);
+    }
+
+    /**
+     * The roster with one seat carrying one more role, which is how the framework
+     * applies `EffectKind::ASSIGN_ROLE` (TR-27). Idempotent, and the roster is
+     * the only place a role is ever written: there is no `trident_seat` column
+     * and no DTO of the seam carries one (TR-29).
+     */
+    public function assignRole(SeatNumber $number, string $role): self
+    {
+        if (! $this->has($number)) {
+            throw new SeatNotFoundException("Seat {$number->value()} is not in this game.");
+        }
+
+        $assigned = [];
+
+        foreach ($this->seats as $seat) {
+            $assigned[] = $seat->number()->equals($number) ? $seat->withRole($role) : $seat;
+        }
+
+        return new self($assigned);
     }
 
     /**

@@ -102,6 +102,32 @@ final class Seat
     }
 
     /**
+     * The same seat under a new number, which is what a lobby reorder writes.
+     * Its identity, its name, its roles and its private state are untouched, so
+     * renumbering the table never rotates a primary key.
+     */
+    public function renumberedTo(SeatNumber $number): self
+    {
+        return new self($this->id, $number, $this->nickname, $this->roles, $this->privateState);
+    }
+
+    /**
+     * The same seat carrying one more role. Idempotent: a role it already holds
+     * leaves it unchanged, so an effect applied twice assigns once (TR-28).
+     *
+     * The role is an opaque string here: what `trident` means is known to the
+     * ruleset that emitted it and to nothing else (TR-29).
+     */
+    public function withRole(string $role): self
+    {
+        if (in_array($role, $this->roles, true)) {
+            return $this;
+        }
+
+        return new self($this->id, $this->number, $this->nickname, [...$this->roles, $role], $this->privateState);
+    }
+
+    /**
      * The seat as the snapshot carries it: exactly these three keys, in this order.
      * Neither the identity nor the private state belongs here.
      *

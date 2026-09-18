@@ -45,6 +45,13 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 $isApi = fn (Request $request): bool => $request->is('api/*') || $request->expectsJson();
 
+/*
+ * The reference a client is handed and the reference the log carries, derived
+ * from the exception itself so that the two callbacks that need it agree without
+ * one of them having to run first or hand anything to the other.
+ */
+$referenceFor = fn (Throwable $e): string => substr(hash('sha256', spl_object_hash($e)), 0, 16);
+
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         api: __DIR__.'/../routes/api.php',
@@ -79,8 +86,19 @@ return Application::configure(basePath: dirname(__DIR__))
         // Safety net: enforces the envelope on any response that did not go out
         // through ApiResponse.
         $middleware->api(append: [ApiResponseMiddleware::class]);
+
+        // The API takes its payloads as they were sent. Laravel's global
+        // conversion turns every "" into null before a FormRequest sees it, and
+        // this product has two places where the two are different answers: an
+        // empty challenge text is a face that announces nothing
+        // (documentation/conventions/room-config.md), and an `expected_version`
+        // of "" is a malformed guard, which has to be refused rather than read
+        // as "no guard".
+        $middleware->convertEmptyStringsToNull(except: [
+            static fn (Request $request): bool => $request->is('api/*'),
+        ]);
     })
-    ->withExceptions(function (Exceptions $exceptions) use ($isApi): void {
+    ->withExceptions(function (Exceptions $exceptions) use ($isApi, $referenceFor): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
@@ -123,20 +141,44 @@ return Application::configure(basePath: dirname(__DIR__))
                 ->withHeaders($e->getHeaders());
         });
 
-        // The SQL and its bindings never leave here, not even with debug turned on.
-        $exceptions->render(function (QueryException $e, Request $request) use ($isApi) {
+        /*
+         * A database failure is logged HERE and by nothing else, and what is
+         * logged is never the exception.
+         *
+         * `QueryException` builds its message by interpolating the bindings into
+         * the statement, and every write of a game binds `games.shuffle_seed`:
+         * the default reporter logs `$e->getMessage()`, which would put the one
+         * secret of the system (TR-09) in cleartext in storage/logs — a store
+         * that is shipped, read and pasted into tickets. Returning false is what
+         * keeps it out of that default stack, and this callback runs wherever the
+         * exception is raised, which a render callback does not.
+         *
+         * The statement with its placeholders says which query failed, the
+         * driver's own exception says why, and neither carries a bound value.
+         */
+        $exceptions->report(function (QueryException $e) use ($referenceFor): bool {
+            Log::error("[{$referenceFor($e)}] QueryException", [
+                'sql' => $e->getSql(),
+                'class' => $e::class,
+                'code' => $e->getCode(),
+                'driver' => $e->getPrevious()?->getMessage(),
+            ]);
+
+            return false;
+        });
+
+        // The SQL and its bindings never leave here either, not even with debug
+        // turned on: the client is handed the reference and nothing else.
+        $exceptions->render(function (QueryException $e, Request $request) use ($isApi, $referenceFor) {
             if (! $isApi($request)) {
                 return null;
             }
-
-            $reference = bin2hex(random_bytes(8));
-            Log::error("[{$reference}] QueryException", ['exception' => $e]);
 
             return ApiResponse::error(
                 'database_error',
                 'Something went wrong.',
                 500,
-                ['ref' => $reference],
+                ['ref' => $referenceFor($e)],
             );
         });
 

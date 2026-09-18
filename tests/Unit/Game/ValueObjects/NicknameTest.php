@@ -27,10 +27,12 @@ final class NicknameTest extends TestCase
         $this->assertSame('Ana Mari', Nickname::fromString('Ana    Mari')->value());
     }
 
-    public function test_two_letter_names_are_valid(): void
+    public function test_tr_15_a_name_is_between_two_and_twenty_four_characters(): void
     {
         // "Bo" and "Al" are real names. The old system's minimum of 4 rejected
         // them; see documentation/conventions/waived-golden-rules.md.
+        $this->assertSame(2, Nickname::MIN_LENGTH);
+        $this->assertSame(24, Nickname::MAX_LENGTH);
         $this->assertSame('Bo', Nickname::fromString('Bo')->value());
         $this->assertSame('Al', Nickname::fromString('Al')->value());
     }

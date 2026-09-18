@@ -13,6 +13,8 @@ use Src\Game\Application\Query\GetGameState\GetGameStateHandler;
 use Src\Game\Application\Query\GetGameState\GetGameStateQuery;
 use Src\Game\Application\Query\ResolveJoinCode\ResolveJoinCodeHandler;
 use Src\Game\Application\Query\ResolveJoinCode\ResolveJoinCodeQuery;
+use Src\Game\Application\Service\GameWriter;
+use Src\Game\Application\Service\JoinCodeMint;
 use Src\Game\Domain\Exceptions\GameNotFoundException;
 use Src\Game\Domain\Exceptions\NicknameTakenException;
 use Src\Game\Domain\Exceptions\SeatNotFoundException;
@@ -20,6 +22,7 @@ use Src\Game\Domain\ValueObjects\GameId;
 use Src\Shared\Infrastructure\Service\FrozenClock;
 use Tests\Doubles\InMemoryGameRepository;
 use Tests\Doubles\SpyGameStatePublisher;
+use Tests\Support\GameProjectorFactory;
 
 final class RenameSeatHandlerTest extends TestCase
 {
@@ -40,6 +43,8 @@ final class RenameSeatHandlerTest extends TestCase
             $this->games,
             $this->publisher,
             FrozenClock::at('2026-09-16 20:00:00'),
+            GameProjectorFactory::make(),
+            new JoinCodeMint($this->games),
         )->handle(new CreateGameCommand(['Ana', 'Bea', 'Caro']));
 
         $this->gameId = $created->snapshot->toArray()['game_id'];
@@ -50,8 +55,7 @@ final class RenameSeatHandlerTest extends TestCase
     private function rename(int $seat, string $nickname, ?string $gameId = null): mixed
     {
         return new RenameSeatHandler(
-            $this->games,
-            $this->publisher,
+            new GameWriter($this->games, $this->publisher, GameProjectorFactory::make()),
             FrozenClock::at('2026-09-16 20:30:00'),
         )->handle(new RenameSeatCommand($gameId ?? $this->gameId, $seat, $nickname));
     }
@@ -71,7 +75,7 @@ final class RenameSeatHandlerTest extends TestCase
         $reloaded = $this->games->find(GameId::fromString($this->gameId));
 
         $this->assertNotNull($reloaded);
-        $this->assertSame('Bea María', $reloaded->snapshot()->toArray()['seats'][1]['nickname']);
+        $this->assertSame('Bea María', GameProjectorFactory::make()->project($reloaded)->toArray()['seats'][1]['nickname']);
     }
 
     public function test_it_publishes_the_new_state_so_the_television_follows(): void
@@ -131,7 +135,7 @@ final class RenameSeatHandlerTest extends TestCase
 
     public function test_the_state_can_be_read_back_by_id(): void
     {
-        $snapshot = new GetGameStateHandler($this->games)
+        $snapshot = new GetGameStateHandler($this->games, GameProjectorFactory::make())
             ->handle(new GetGameStateQuery($this->gameId));
 
         $this->assertSame($this->gameId, $snapshot->toArray()['game_id']);
@@ -141,12 +145,12 @@ final class RenameSeatHandlerTest extends TestCase
     {
         $this->expectException(GameNotFoundException::class);
 
-        new GetGameStateHandler($this->games)->handle(new GetGameStateQuery(GameId::random()->value()));
+        new GetGameStateHandler($this->games, GameProjectorFactory::make())->handle(new GetGameStateQuery(GameId::random()->value()));
     }
 
     public function test_a_television_can_find_the_game_by_its_typed_code(): void
     {
-        $snapshot = new ResolveJoinCodeHandler($this->games)
+        $snapshot = new ResolveJoinCodeHandler($this->games, GameProjectorFactory::make())
             ->handle(new ResolveJoinCodeQuery(strtolower($this->joinCode)));
 
         $this->assertSame($this->gameId, $snapshot->toArray()['game_id']);
@@ -156,13 +160,13 @@ final class RenameSeatHandlerTest extends TestCase
     {
         $this->expectException(GameNotFoundException::class);
 
-        new ResolveJoinCodeHandler($this->games)->handle(new ResolveJoinCodeQuery('ZZZZZZ'));
+        new ResolveJoinCodeHandler($this->games, GameProjectorFactory::make())->handle(new ResolveJoinCodeQuery('ZZZZZZ'));
     }
 
     public function test_a_malformed_code_is_not_found_rather_than_a_crash(): void
     {
         $this->expectException(GameNotFoundException::class);
 
-        new ResolveJoinCodeHandler($this->games)->handle(new ResolveJoinCodeQuery('!!!'));
+        new ResolveJoinCodeHandler($this->games, GameProjectorFactory::make())->handle(new ResolveJoinCodeQuery('!!!'));
     }
 }

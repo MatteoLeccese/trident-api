@@ -10,6 +10,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Src\Game\Domain\Model\Game;
+use Src\Game\Domain\Model\GameSnapshot;
 use Src\Game\Domain\Model\SeatRoster;
 use Src\Game\Domain\ValueObjects\ControllerToken;
 use Src\Game\Domain\ValueObjects\GameId;
@@ -18,6 +19,7 @@ use Src\Game\Domain\ValueObjects\Nickname;
 use Src\Realtime\Application\Service\GameStatePublisher;
 use Src\Realtime\Infrastructure\Broadcasting\GameStateChanged;
 use Src\Shared\Infrastructure\Service\FrozenClock;
+use Tests\Support\GameProjectorFactory;
 use Tests\Support\SourceInspector;
 use Tests\TestCase;
 
@@ -38,11 +40,17 @@ final class GameStatePublisherTest extends TestCase
         );
     }
 
+    /** The projection of that game, built exactly as a request builds it. */
+    private function snapshot(): GameSnapshot
+    {
+        return GameProjectorFactory::make()->project($this->game());
+    }
+
     public function test_publishing_dispatches_the_event(): void
     {
         Event::fake();
 
-        $this->app->make(GameStatePublisher::class)->publish($this->game()->snapshot());
+        $this->app->make(GameStatePublisher::class)->publish($this->snapshot());
 
         Event::assertDispatched(GameStateChanged::class);
     }
@@ -51,7 +59,7 @@ final class GameStatePublisherTest extends TestCase
     {
         // A queued snapshot broadcast reorders state, and the old system queued on
         // a driver with no worker. This is a settled decision.
-        $event = new GameStateChanged($this->game()->snapshot());
+        $event = new GameStateChanged($this->snapshot());
 
         $this->assertInstanceOf(ShouldBroadcastNow::class, $event);
         $this->assertInstanceOf(ShouldBroadcast::class, $event);
@@ -59,7 +67,7 @@ final class GameStatePublisherTest extends TestCase
 
     public function test_it_broadcasts_on_the_presence_channel_of_that_game(): void
     {
-        $channel = new GameStateChanged($this->game()->snapshot())->broadcastOn();
+        $channel = new GameStateChanged($this->snapshot())->broadcastOn();
 
         $this->assertInstanceOf(PresenceChannel::class, $channel);
         $this->assertSame('presence-game.0f8fad5b-d9cb-469f-a165-70867728950e', $channel->name);
@@ -69,14 +77,21 @@ final class GameStatePublisherTest extends TestCase
     {
         // The client listens for `.GameStateChanged`; renaming it breaks
         // the television.
-        $this->assertSame('GameStateChanged', new GameStateChanged($this->game()->snapshot())->broadcastAs());
+        $this->assertSame('GameStateChanged', new GameStateChanged($this->snapshot())->broadcastAs());
     }
 
     public function test_the_payload_is_exactly_the_snapshot(): void
     {
-        $snapshot = $this->game()->snapshot();
+        $snapshot = $this->snapshot();
 
-        $this->assertSame($snapshot->toArray(), new GameStateChanged($snapshot)->broadcastWith());
+        // Compared by value and then by bytes: the projection carries a JSON
+        // object for `room_config`, and two encodings of the same empty map are
+        // different PHP instances.
+        $this->assertEquals($snapshot->toArray(), new GameStateChanged($snapshot)->broadcastWith());
+        $this->assertSame(
+            json_encode($snapshot->toArray()),
+            json_encode(new GameStateChanged($snapshot)->broadcastWith()),
+        );
     }
 
     public function test_the_event_never_reads_storage_to_build_its_payload(): void
@@ -94,7 +109,7 @@ final class GameStatePublisherTest extends TestCase
 
     public function test_the_payload_never_carries_a_credential(): void
     {
-        $encoded = json_encode(new GameStateChanged($this->game()->snapshot())->broadcastWith());
+        $encoded = json_encode(new GameStateChanged($this->snapshot())->broadcastWith());
 
         $this->assertIsString($encoded);
 
@@ -112,7 +127,7 @@ final class GameStatePublisherTest extends TestCase
         Event::fake();
         Event::shouldReceive('dispatch')->andThrow(new \RuntimeException('reverb down'));
 
-        $this->app->make(GameStatePublisher::class)->publish($this->game()->snapshot());
+        $this->app->make(GameStatePublisher::class)->publish($this->snapshot());
 
         $this->addToAssertionCount(1);
     }
