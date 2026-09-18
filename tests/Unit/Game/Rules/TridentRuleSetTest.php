@@ -83,13 +83,14 @@ final class TridentRuleSetTest extends TestCase
         $this->assertContains('21', $faces);
         $this->assertContains('12', $faces);
 
+        // Asserted in `main`, the stage that fires anything (TR-23).
         $this->assertSame(
             ['challenge.face.2', 'challenge.face.1'],
-            $this->configKeys($this->drawIn(self::ELECTION, Tile::fromString('21'))),
+            $this->configKeys($this->drawIn(self::MAIN, Tile::fromString('21'))),
         );
         $this->assertSame(
             ['challenge.face.1', 'challenge.face.2'],
-            $this->configKeys($this->drawIn(self::ELECTION, Tile::fromString('12'))),
+            $this->configKeys($this->drawIn(self::MAIN, Tile::fromString('12'))),
         );
     }
 
@@ -171,6 +172,9 @@ final class TridentRuleSetTest extends TestCase
         foreach ($this->fullGame() as $turn) {
             $this->assertNull($turn['outcome']->pendingChoice());
             $this->assertSame([], $turn['outcome']->ruleStatePatch());
+        }
+
+        foreach ($this->game()['main'] as $turn) {
             $this->assertNotEmpty($turn['outcome']->effects());
         }
 
@@ -306,17 +310,24 @@ final class TridentRuleSetTest extends TestCase
         $this->assertNotNull($this->lastOf($turns)['outcome']->overrideNextSeat());
     }
 
-    public function test_tr_23_every_tile_flipped_in_the_election_fires_both_face_challenges(): void
+    public function test_tr_23_the_election_fires_no_challenge_at_all(): void
     {
-        foreach ($this->play(self::ELECTION, $this->roster()) as $turn) {
-            $this->assertSame(
-                [
-                    TridentRuleSet::challengeKey($turn['tile']->left()),
-                    TridentRuleSet::challengeKey($turn['tile']->right()),
-                ],
-                $this->configKeys($turn['outcome']),
-            );
+        $turns = $this->play(self::ELECTION, $this->roster());
+
+        // Every draw but the last produces a completely empty outcome, and the
+        // last one produces the role and still no challenge: a face of three
+        // reached in the election is a face like any other, and it says nothing.
+        foreach (array_slice($turns, 0, -1) as $turn) {
+            $this->assertSame([], $turn['outcome']->effects());
         }
+
+        $this->assertSame([], $this->configKeysOf($turns));
+
+        // Asserted against a tile that carries the face the game does treat
+        // specially, so a stage that leaked the main rule would be caught here
+        // and not only in the fixture the shuffle happened to deal.
+        $this->assertSame([], $this->configKeys($this->drawIn(self::ELECTION, Tile::fromString('36'))));
+        $this->assertSame([], $this->configKeys($this->drawIn(self::ELECTION, Tile::fromString('30'), SeatNumber::fromInt(4), $this->roster(5, 2))));
     }
 
     public function test_tr_24_the_election_ends_on_the_double_three(): void
@@ -517,9 +528,15 @@ final class TridentRuleSetTest extends TestCase
 
     public function test_tr_38_every_flipped_tile_fires_exactly_two_challenges(): void
     {
-        foreach ($this->fullGame() as $turn) {
+        $game = $this->game();
+
+        foreach ($game['main'] as $turn) {
             $this->assertCount(2, $this->configKeys($turn['outcome']));
         }
+
+        // And the election fires none of them (TR-23), which is what makes this
+        // a claim about one stage rather than about every draw of the game.
+        $this->assertSame([], $this->configKeysOf($game['election']));
     }
 
     public function test_tr_39_the_left_face_fires_before_the_right_one(): void
@@ -529,7 +546,7 @@ final class TridentRuleSetTest extends TestCase
             $this->configKeys($this->drawIn(self::MAIN, Tile::fromString('21'))),
         );
 
-        foreach ($this->fullGame() as $turn) {
+        foreach ($this->game()['main'] as $turn) {
             $this->assertSame(
                 [
                     TridentRuleSet::challengeKey($turn['tile']->left()),
@@ -538,16 +555,6 @@ final class TridentRuleSetTest extends TestCase
                 $this->configKeys($turn['outcome']),
             );
         }
-    }
-
-    public function test_tr_40_the_role_is_assigned_before_the_challenges_of_its_tile(): void
-    {
-        $outcome = $this->drawIn(self::ELECTION, Tile::fromString(self::DOUBLE_THREE));
-
-        $this->assertSame(
-            [EffectKind::ASSIGN_ROLE, EffectKind::CHALLENGE, EffectKind::CHALLENGE],
-            array_map(static fn (Effect $effect): string => $effect->kind(), $outcome->effects()),
-        );
     }
 
     public function test_tr_41_a_double_fires_the_challenge_of_its_face_twice(): void
@@ -647,26 +654,14 @@ final class TridentRuleSetTest extends TestCase
         $this->assertNull($outcome->overrideNextSeat());
     }
 
-    public function test_tr_47_in_the_election_the_face_of_three_is_answered_by_the_drawer(): void
-    {
-        // Inference I1: before the double three no trident exists, so the face of
-        // three behaves like the other six. The roster already carries a role
-        // here, and the election still addresses the drawer.
-        $outcome = $this->drawIn(self::ELECTION, Tile::fromString('36'), SeatNumber::fromInt(4), $this->roster(5, 2));
-
-        $this->assertSame([['challenge.face.3', 4], ['challenge.face.6', 4]], $this->targets($outcome));
-    }
-
-    public function test_tr_48_the_electing_draw_emits_the_role_and_both_face_three_challenges(): void
+    public function test_tr_48_the_electing_draw_emits_the_role_and_nothing_else(): void
     {
         $outcome = $this->drawIn(self::ELECTION, Tile::fromString(self::DOUBLE_THREE), SeatNumber::fromInt(4));
 
+        // One effect for the whole stage. The tile that ends the election carries
+        // two threes and fires neither of them.
         $this->assertSame(
-            [
-                ['kind' => 'assign_role', 'seat' => 4, 'role' => 'trident'],
-                ['kind' => 'challenge', 'seat' => 4, 'config_key' => 'challenge.face.3'],
-                ['kind' => 'challenge', 'seat' => 4, 'config_key' => 'challenge.face.3'],
-            ],
+            [['kind' => 'assign_role', 'seat' => 4, 'role' => 'trident']],
             array_map(static fn (Effect $effect): array => $effect->toArray(), $outcome->effects()),
         );
     }
@@ -685,14 +680,6 @@ final class TridentRuleSetTest extends TestCase
         foreach ($outcome->effects() as $effect) {
             $this->assertSame([], array_intersect(array_keys($effect->toArray()), ['delay', 'delay_ms', 'duration', 'order']));
         }
-    }
-
-    public function test_tr_49_those_two_challenges_are_answered_by_the_seat_that_just_became_trident(): void
-    {
-        $outcome = $this->drawIn(self::ELECTION, Tile::fromString(self::DOUBLE_THREE), SeatNumber::fromInt(4));
-
-        $this->assertSame(4, $outcome->effects()[0]->seat()?->value());
-        $this->assertSame([['challenge.face.3', 4], ['challenge.face.3', 4]], $this->targets($outcome));
     }
 
     public function test_tr_50_it_emits_only_roles_and_challenges(): void
@@ -720,6 +707,10 @@ final class TridentRuleSetTest extends TestCase
 
             $this->assertSame('text', $field->kind());
             $this->assertSame(80, $field->maxLength());
+
+            // The label names the face, so a screen heading a card with it never
+            // has to take the number out of the key itself.
+            $this->assertSame("Face {$face}", $field->label());
             $this->assertNotSame('', $field->default());
             $this->assertLessThanOrEqual(80, mb_strlen((string) $field->default()));
             $this->assertMatchesRegularExpression('/\A[\x20-\x7E]+\z/', (string) $field->default());

@@ -73,7 +73,7 @@ final class SpecificationCoverageTest extends TestCase
     public function test_the_specification_is_read_at_all(): void
     {
         $this->assertFileExists(self::root().'/'.self::RULES);
-        $this->assertCount(59, $this->documentedNumbers());
+        $this->assertCount(56, $this->documentedNumbers());
     }
 
     public function test_every_numbered_assertion_carries_a_test_named_with_its_number(): void

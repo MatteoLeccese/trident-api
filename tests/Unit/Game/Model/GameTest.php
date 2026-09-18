@@ -433,7 +433,10 @@ final class GameTest extends TestCase
         $this->assertSame(MoveKind::TILE_DRAWN, $moves[0]->kind());
         $this->assertSame($acting->value(), $moves[0]->actorSeat()?->value());
         $this->assertSame(1, $moves[0]->payload()['position']);
-        $this->assertNotEmpty($moves[0]->payload()['effects']);
+
+        // The move always carries the seam's output, whatever it was: what a
+        // stage produces is the ruleset's answer and not the aggregate's.
+        $this->assertArrayHasKey('effects', $moves[0]->payload());
         $this->assertSame(1, $game->turnNumber());
         $this->assertSame(1, $game->drawLog()->all()[0]->seat()->value());
     }

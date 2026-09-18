@@ -660,6 +660,34 @@ final class EloquentGameRepositoryTest extends TestCase
      * The seed is a literal so that the pool is the same pool on every run: a
      * round trip that depends on chance proves nothing about what came back.
      */
+    /**
+     * A saved game turned one draw into `main`.
+     *
+     * The election produces no effect at all (TR-23), so a game that has only
+     * played in it has nothing here to read back: `main` is the first stage whose
+     * draws carry the seam's output.
+     */
+    private function gamePlayedIntoMain(): Game
+    {
+        $game = $this->playedGame(0);
+        $rules = new TridentRuleSet;
+        $at = static fn (int $step): FrozenClock => FrozenClock::at(
+            sprintf('2026-09-16 21:%02d:%02d', intdiv($step, 60), $step % 60),
+        );
+
+        $step = 0;
+
+        while ($game->stage()?->value() === TridentRuleSet::STAGE_ELECTION) {
+            $game->drawTile(PoolPosition::fromInt(++$step), $rules, $at($step));
+        }
+
+        $game->drawTile(PoolPosition::first(), $rules, $at(++$step));
+
+        $this->repository()->save($game);
+
+        return $game;
+    }
+
     private function playedGame(int $draws = 3): Game
     {
         $game = Game::open(
@@ -972,7 +1000,7 @@ final class EloquentGameRepositoryTest extends TestCase
         // of the log. Without the read half, a television that asks for the state
         // it missed is told the board changed and never what the rules asked the
         // table to do.
-        $game = $this->playedGame();
+        $game = $this->gamePlayedIntoMain();
 
         $reloaded = $this->repository()->find($game->id());
 

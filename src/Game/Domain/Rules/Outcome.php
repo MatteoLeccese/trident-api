@@ -65,7 +65,7 @@ final class Outcome implements JsonSerializable
         return new self(array_values($effects), null, null, [], false, null, null);
     }
 
-    /** Effects are applied in the order they are added (TR-39, TR-40). */
+    /** Effects are applied in the order they are added (TR-39). */
     public function withEffect(Effect $effect): self
     {
         return new self(

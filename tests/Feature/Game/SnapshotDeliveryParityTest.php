@@ -90,6 +90,25 @@ final class SnapshotDeliveryParityTest extends TestCase
     }
 
     /**
+     * Turns the election over position by position until the double three ends
+     * it, leaving the game on the first draw of `main`.
+     */
+    private function playTheElection(string $gameId, string $token): void
+    {
+        for ($position = 1; $position <= 49; $position++) {
+            $stage = $this->postJson("/api/v1/games/{$gameId}/pool/{$position}/draw", [], [
+                'X-Trident-Controller-Token' => $token,
+            ])->assertOk()->json('data.stage');
+
+            if ($stage === 'main') {
+                return;
+            }
+        }
+
+        self::fail('The election never reached the double three (TR-26).');
+    }
+
+    /**
      * The payload of the single broadcast the write emitted.
      *
      * @return array<string, mixed>
@@ -279,6 +298,10 @@ final class SnapshotDeliveryParityTest extends TestCase
         $this->postJson("/api/v1/games/{$gameId}/start", [], ['X-Trident-Controller-Token' => $token])
             ->assertOk();
 
+        // The election fires nothing (TR-23), so the question this test asks has
+        // no answer until the game is in `main`.
+        $this->playTheElection($gameId, $token);
+
         Event::fake([GameStateChanged::class]);
 
         $drawn = $this->postJson("/api/v1/games/{$gameId}/pool/1/draw", [], [
@@ -287,7 +310,7 @@ final class SnapshotDeliveryParityTest extends TestCase
 
         $effects = (array) $drawn->json('data.effects');
 
-        $this->assertNotSame([], $effects, 'A turned-over tile fires something (TR-38).');
+        $this->assertNotSame([], $effects, 'A turned-over tile fires something in main (TR-38).');
 
         foreach ($effects as $effect) {
             $this->assertArrayHasKey('kind', (array) $effect);

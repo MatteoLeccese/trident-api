@@ -9,6 +9,9 @@
 Cada regla es **una línea numerada con una sola afirmación comprobable**. La numeración es estable:
 un número no se recicla nunca, y una regla que deja de existir se borra dejando su número muerto.
 
+**Números muertos: TR-40, TR-47 y TR-49.** Existieron y se borraron; no se reutilizan. Lo que
+queda de ellos está en TR-23 y TR-48.
+
 La forma no es decorativa. **La estrategia de test es un test unitario por afirmación numerada**, en
 `tests/Unit/Game/Rules/TridentRuleSetTest.php`, nombrado con su número —
 `test_tr_24_the_election_ends_on_the_double_three()` — de modo que la cobertura de la especificación
@@ -95,8 +98,8 @@ inferencia I2.
 repetición. La única cogida de la elección que devuelve `overrideNextSeat` es la del `3|3`, y lo hace
 para fijar el asiento que abre `main` (TR-32), no para alterar el orden de la propia elección.
 
-**TR-23.** Cada ficha volteada en la elección dispara los retos de sus dos caras, igual que en el
-juego principal.
+**TR-23.** En la elección no se dispara **ningún** reto. La etapa voltea fichas hasta que aparece el
+`3|3` y ahí termina; los retos son del juego principal.
 
 **TR-24.** La elección termina **exactamente** en la cogida del `3|3`, y en ninguna otra: esa cogida
 devuelve `nextStage = main` y ninguna otra devuelve `nextStage`.
@@ -143,16 +146,14 @@ aterriza en `abandoned`, que es terminal del framework y no consulta al ruleset.
 
 ## 8. Los retos
 
-**TR-38.** Cada ficha volteada dispara **exactamente dos retos**, uno por cara, en los dos stages.
+**TR-38.** En `main`, cada ficha volteada dispara **exactamente dos retos**, uno por cara. En la
+elección no dispara ninguno (TR-23), así que toda esta sección habla de un solo stage.
 
 **TR-39.** El orden es cara izquierda y luego cara derecha: la ficha `2|1` dispara
 `challenge.face.2` y después `challenge.face.1`.
 
-**TR-40.** Cuando una cogida asigna rol, el `assignRole` va **antes** que los dos retos en
-`Outcome.effects`.
-
-**TR-41.** Un doble dispara dos veces el reto de su única cara: `3|3` dispara `challenge.face.3` dos
-veces.
+**TR-41.** En `main`, un doble dispara dos veces el reto de su única cara: `3|3` dispara
+`challenge.face.3` dos veces.
 
 **TR-42.** Un reto viaja como `Effect::challenge(?SeatNumber $target, string $configKey)` y lleva
 **la clave, nunca el texto**; en el cable es `{ "kind": "challenge", "seat": 1, "config_key":
@@ -172,18 +173,13 @@ la ficha. Es la única regla del juego cuyo destinatario no es quien coge, y es 
 **TR-46.** El `3|3` en `main` no tiene tratamiento específico: es una ficha con dos treses, y emite
 dos `challenge.face.3` dirigidos al trident. No hay rama por ficha en ninguna parte del código.
 
-**TR-47.** En la elección, el reto de la cara 3 apunta al asiento que cogió la ficha — ver
-inferencia I1.
-
-**TR-48.** La cogida del `3|3` en la elección emite `assignRole` y además los dos retos de la cara 3.
+**TR-48.** La cogida del `3|3` en la elección emite `assignRole` y la transición de stage, y ningún
+reto: es el único efecto que produce la etapa entera.
 
 **TR-48b.** Los retos de una ficha se anuncian **después** de que termine la animación de revelación,
 separados de ella por una pausa breve. El orden que ve la mesa es: se toca la posición, la ficha se
 voltea, y entonces saltan los dos retos. La pausa es de cliente y no llega al servidor: el snapshot
 emite la cogida y sus efectos en el mismo instante, y es la pantalla la que los escalona.
-
-**TR-49.** Esos dos retos apuntan al asiento que cogió la ficha, que es el mismo asiento que acaba de
-recibir el rol de trident.
 
 **TR-50.** `trident.v1` emite exactamente dos clases de efecto, `assignRole` y `challenge`. No emite
 `announce`: cada momento que merece pintarse ya es un efecto que la UI resuelve.
@@ -218,9 +214,10 @@ El `3|3` es único en un pool de 49 barajado uniformemente, así que **su posici
 1..49**: la elección dura **25 cogidas de media y 49 en el peor caso**. Con cinco jugadores eso son
 cinco rondas de media y diez en el peor caso.
 
-La consecuencia de producto se escribe aquí para que ninguna pantalla la olvide: **la elección es una
-parte sustancial de la velada, no un preámbulo.** Por eso cada ficha volteada dispara ya sus dos
-retos (TR-23) — sin ellos, media hora de mesa no produciría nada.
+La consecuencia de producto se escribe aquí para que ninguna pantalla la olvide: **la elección es
+mecánica y va deprisa.** No se lee nada en voz alta (TR-23), así que sus veinticinco cogidas de media
+son veinticinco toques y no veinticinco pausas, y la pantalla no debe meter ni una interrupción que no
+sea voltear la ficha.
 
 El juego principal son **exactamente 49 cogidas**: diez turnos por cabeza con cinco jugadores.
 
@@ -237,13 +234,10 @@ veces, y se disparan 98 retos en total.
 Una inferencia **no es una regla que el autor haya dicho**. Se aísla aquí, con la frase suya en la que
 se apoya, para que revocarla cueste una línea.
 
-**I1 — Durante la elección el reto de la cara 3 apunta a quien coge la ficha.**
-Se apoya en la respuesta 4: *«razon por la cual **en el juego normal** cada vez que salga un '3' se
-debe hacer el 'reto' del tridente»*, y en la respuesta 6: *«**En la etapa de juego** cada vez que
-salga un '3' … el tridente debe hacer el 'reto del tridente'»*. Las dos frases acotan el
-direccionamiento al trident **al stage `main`**. Durante la elección todavía no hay trident, así que
-la cara 3 se comporta como las otras seis y apunta al que coge. Implementa TR-47.
-Si el autor la revoca, cambia una condición dentro de una sola clase y ningún esquema.
+**I1 está revocada.** Decía que durante la elección el reto de la cara 3 apuntaba a quien cogía la
+ficha. El autor precisó después que en la elección no se dispara ningún reto (TR-23), así que la
+pregunta que la inferencia respondía ya no llega a hacerse. Revocarla costó una llamada dentro de
+`trident.v1` y ningún esquema, que es exactamente lo que aislarla compraba.
 
 **I2 — La elección la abre el asiento 1.**
 Se apoya en la respuesta 9: *«Abre el primero de la lista de juego»*, dicha del juego principal. Antes

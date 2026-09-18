@@ -12,9 +12,14 @@ acaba un stage, qué ficha puedes coger o cuándo se dispara un reto, no es un a
 una regla sólo puede vivir detrás de `RuleSet`.
 
 La frontera pasa por dentro de los retos, y conviene decirla de una vez: **cuándo se dispara un reto
-es una regla; qué dice el reto es un ajuste.** Cuántos retos dispara una ficha, en qué orden y a quién
-apuntan lo decide el ruleset (TR-38, TR-39, TR-44, TR-47). Las frases las escribe la sala, y
-reescribirlas todas no cambia una sola cogida (TR-53).
+es una regla; qué dice el reto es un ajuste.** En qué stage dispara retos una ficha, cuántos, en qué
+orden y a quién apuntan lo decide el ruleset (TR-23, TR-38, TR-39, TR-44). Las frases las escribe la
+sala, y reescribirlas todas no cambia una sola cogida (TR-53).
+
+El `label` de un campo lo declara el ruleset y es **el nombre de la cosa a la que su texto está
+pegado** — `Face 3` para `challenge.face.3`. Lo declara ahí porque es el único sitio que lo sabe: una
+pantalla que sacara el `3` de la clave estaría leyendo una regla de un ajuste. Es corto a propósito,
+porque además de etiquetar la caja del lobby encabeza la tarjeta en el televisor.
 
 Debajo de las dos hay una tercera capa: la **presentación**. Casi toda vive en el cliente y no llega
 a la API: el aspecto de una posición cogida, la animación de volteo y la transición de traspaso del

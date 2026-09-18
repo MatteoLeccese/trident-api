@@ -32,12 +32,13 @@ use Src\Game\Domain\ValueObjects\TileDeck;
  * test per applicable number, so the coverage of the specification is audited by
  * reading the two lists side by side.
  *
- * The whole game is two stages of the same move — a seat turns a position over
- * and each of the tile's two faces fires its challenge (TR-38) — plus one
- * exception: in `main` the face of three is answered by the trident and not by
- * whoever drew it (TR-44). That exception is the reason `Effect::challenge()`
- * carries a target, and it lives in this class alone: no column, no route, no
- * projection and no screen knows what a trident is.
+ * The game is two stages of the same move, and they differ in what a draw
+ * produces. The election turns tiles over and produces nothing until the double
+ * three appears (TR-23); `main` fires the challenge of each of the tile's two
+ * faces (TR-38), with one exception: the face of three is answered by the
+ * trident and not by whoever drew it (TR-44). That exception is the reason
+ * `Effect::challenge()` carries a target, and it lives in this class alone: no
+ * column, no route, no projection and no screen knows what a trident is.
  *
  * Stateless: it keeps no properties and writes nothing to `RuleState` beyond the
  * version the framework stamps (TR-19), so every decision is taken from the
@@ -147,6 +148,11 @@ final class TridentRuleSet implements RuleSet
      * Seven challenge texts, one per face (TR-43, TR-51), and the two per-stage
      * presentation settings (TR-52). Rewriting any of them changes no draw
      * (TR-53): when a challenge fires is a rule, what it says is a setting.
+     *
+     * A field's label is the name of the thing its text is attached to, and it is
+     * declared here because it is the only place that knows: a screen that took
+     * the face out of `challenge.face.3` would be reading a rule off a settings
+     * key. It is short enough to head a card on a television.
      */
     public function roomConfigSpec(): RoomConfigSpec
     {
@@ -155,7 +161,7 @@ final class TridentRuleSet implements RuleSet
         for ($face = 0; $face <= self::MAX_FACE; $face++) {
             $fields[] = RoomConfigField::text(
                 self::challengeKey($face),
-                "Challenge for face {$face}",
+                "Face {$face}",
                 self::defaultChallenge($face),
                 self::CHALLENGE_MAX_LENGTH,
             );
@@ -221,38 +227,30 @@ final class TridentRuleSet implements RuleSet
     }
 
     /**
-     * Every flipped tile fires the challenges of its two faces (TR-23), and all
-     * of them are answered by whoever drew it: no trident exists yet, so the face
-     * of three behaves like the other six (TR-47, inference I1 — the one rule of
-     * this ruleset that was inferred rather than stated, and revoking it changes
-     * this condition and no schema).
+     * The election fires no challenge (TR-23). It turns tiles over until the
+     * double three appears, and every draw before that one produces an empty
+     * outcome: the stage exists to name the trident and to do nothing else.
      *
-     * The double three ends the election on that draw and on no other (TR-24):
-     * its drawer takes the role (TR-27, TR-48) and seat one opens `main`
-     * (TR-32). The rest of the election pool is never played (TR-25).
+     * That draw ends the election, and no other draw does (TR-24): whoever made
+     * it takes the role (TR-27, TR-48) and seat one opens `main` (TR-32). The
+     * rest of the election pool is never played (TR-25).
      */
     private function onElectionDraw(DrawContext $context): Outcome
     {
-        $elects = $context->tile()->equals(self::tridentTile());
+        if (! $context->tile()->equals(self::tridentTile())) {
+            return Outcome::empty();
+        }
 
-        // The role is assigned before the challenges of the tile that assigned
-        // it (TR-40).
-        $outcome = $elects
-            ? Outcome::of(Effect::assignRole($context->seat(), self::ROLE_TRIDENT))
-            : Outcome::empty();
-
-        $outcome = $this->withFaceChallenges($outcome, $context->tile(), $context->seat(), $context->seat());
-
-        return $elects
-            ? $outcome->withNextStage(self::main())->withNextSeat(SeatNumber::first())
-            : $outcome;
+        return Outcome::of(Effect::assignRole($context->seat(), self::ROLE_TRIDENT))
+            ->withNextStage(self::main())
+            ->withNextSeat(SeatNumber::first());
     }
 
     /**
-     * The same two challenges (TR-38), addressed by face: the trident answers for
-     * the face of three (TR-44) and the drawer for the other six (TR-45). The
-     * double three is a tile with two threes and nothing else (TR-46), so there
-     * is no branch here on any tile.
+     * The only stage that fires a challenge (TR-38), addressed by face: the
+     * trident answers for the face of three (TR-44) and the drawer for the other
+     * six (TR-45). The double three is a tile with two threes and nothing else
+     * (TR-46), so there is no branch here on any tile.
      *
      * The stage ends when its pool runs out, which is the draw that empties it
      * (TR-34, TR-36), and nothing else ends the game by rule (TR-35).
@@ -279,6 +277,9 @@ final class TridentRuleSet implements RuleSet
      * The left face and then the right one (TR-39), which fires a double's single
      * face twice (TR-41). A challenge carries the key and never the text (TR-42),
      * and its seat is the recipient and never the author.
+     *
+     * Called from `main` and from nowhere else: the election has no challenge to
+     * address (TR-23).
      */
     private function withFaceChallenges(Outcome $outcome, Tile $tile, SeatNumber $drawer, SeatNumber $tridentFaceSeat): Outcome
     {

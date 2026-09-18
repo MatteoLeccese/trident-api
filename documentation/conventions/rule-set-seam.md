@@ -202,12 +202,13 @@ Effect::challenge(?SeatNumber $target, string $configKey)    // copia que escrib
 ```
 
 `trident.v1` emite dos de los tres: `assignRole` en la cogida del `3|3` de la elección (TR-27) y
-`challenge` dos veces por ficha volteada (TR-38). `announce` se queda en el vocabulario sin emisor de
+`challenge` dos veces por ficha volteada **en `main`** (TR-38). La elección no emite ningún reto
+(TR-23), así que los dos stages se distinguen por lo que produce una cogida y no por cómo se procesa. `announce` se queda en el vocabulario sin emisor de
 producción: cada momento que merece pintarse ya es uno de los otros dos efectos.
 
 **`Effect::challenge` lleva `target` por una razón concreta y en producción:** TR-44. En `main`, el
 reto de la cara 3 apunta al asiento del trident y no a quien cogió la ficha; los demás retos apuntan a
-quien cogió (TR-45), y durante la elección todos apuntan a quien cogió (TR-47). Sin `target`, esa
+quien cogió (TR-45). Sin `target`, esa
 única excepción obligaría a que el cliente supiera qué es un trident. `$target === null` significa
 "toda la mesa", que es un campo nullable en lugar de quince efectos repetidos.
 
@@ -259,8 +260,8 @@ clave desconocida o ausente, y por qué esa forma sostiene el criterio de cero m
 [`room-config.md`](room-config.md).
 
 La frontera entre las dos primeras capas pasa por dentro de los retos: **cuándo se dispara un reto es
-una regla y qué dice es un ajuste.** Que cada ficha volteada dispare los retos de sus dos caras en los
-dos stages, en qué orden y contra quién, es regla del ruleset (TR-38, TR-39, TR-44); las siete frases
+una regla y qué dice es un ajuste.** En qué stage dispara una ficha volteada los retos de sus dos
+caras, en qué orden y contra quién, es regla del ruleset (TR-23, TR-38, TR-39, TR-44); las siete frases
 que se anuncian las escribe la sala (TR-43, TR-53).
 
 El error de capa más fácil de cometer: *"las fichas cogidas se quitan del tablero"* **no es
