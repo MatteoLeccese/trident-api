@@ -79,6 +79,17 @@ final class ArchitectureTest extends TestCase
     /** Contexts that must exist. Adding a new one here is part of creating it. */
     private const EXPECTED_CONTEXTS = ['Game', 'Realtime', 'Shared'];
 
+    /**
+     * The word this repository may not contain, assembled rather than written.
+     *
+     * Written out, this constant would be the first thing a scan of the tracked
+     * tree found, and the guard would fail on itself.
+     */
+    private const DEVELOPMENT_STAGE_WORD = 'ph'.'ase';
+
+    /** Where the tracked tree is scanned for it. Vendor and build output are not ours. */
+    private const TRACKED_DIRECTORIES = ['app', 'bootstrap', 'config', 'database', 'documentation', 'routes', 'src', 'tests'];
+
     private static function root(): string
     {
         return dirname(__DIR__, 2);
@@ -141,8 +152,8 @@ final class ArchitectureTest extends TestCase
         foreach (glob(self::root().'/src/*/Domain', GLOB_ONLYDIR) ?: [] as $domain) {
             $context = basename(dirname($domain));
 
-            // A context with no files yet is legitimate (Game and Realtime until
-            // phase 2), but the directory has to exist.
+            // A context with no domain files yet is legitimate, but the
+            // directory has to exist: an empty scan is a failure, not a pass.
             foreach ($this->phpFilesIn("src/{$context}/Domain", mustHaveFiles: false) as $file) {
                 $scanned++;
                 $contents = SourceInspector::codeOf($file);
@@ -344,5 +355,69 @@ final class ArchitectureTest extends TestCase
         }
 
         $this->assertSame([], $offences, 'Dependencies point inward: Infrastructure → Application → Domain.');
+    }
+
+    public function test_nothing_tracked_names_a_stage_of_the_work(): void
+    {
+        /*
+         * The repository is the product and never the project. A comment, a test
+         * name or a document that says which instalment of the work something
+         * belonged to is a note to us, dated the moment it was written and wrong
+         * from the day after — and it tells a reader who arrives later something
+         * they cannot act on.
+         *
+         * The planning lives outside both repositories on purpose, and this is
+         * what keeps it from leaking back in one comment at a time.
+         */
+        $offences = [];
+        $scanned = 0;
+
+        foreach (self::TRACKED_DIRECTORIES as $directory) {
+            foreach ($this->filesIn($directory) as $file) {
+                $scanned++;
+
+                $relative = str_replace(self::root().'/', '', $file);
+
+                if ($relative === 'tests/Unit/ArchitectureTest.php') {
+                    // This file names the word in order to forbid it.
+                    continue;
+                }
+
+                $contents = (string) file_get_contents($file);
+
+                if (preg_match('/'.self::DEVELOPMENT_STAGE_WORD.'[ _-]?\\d/i', $contents) === 1) {
+                    $offences[] = $relative;
+                }
+            }
+        }
+
+        $this->assertGreaterThan(0, $scanned, 'Nothing was scanned: this test is not testing anything.');
+        $this->assertSame([], $offences, 'These tracked files name a stage of the work: '.implode(', ', $offences));
+    }
+
+    /**
+     * Every file under a tracked directory, whatever its extension.
+     *
+     * Not just PHP: the word this guard looks for leaks into a compose file, a
+     * shell script and a convention document exactly as easily.
+     *
+     * @return list<string>
+     */
+    private function filesIn(string $relative): array
+    {
+        $root = self::root().'/'.$relative;
+
+        $this->assertDirectoryExists($root, "Expected to scan '{$relative}' but it does not exist.");
+
+        $files = [];
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, RecursiveDirectoryIterator::SKIP_DOTS));
+
+        foreach ($iterator as $file) {
+            if ($file->isFile()) {
+                $files[] = $file->getPathname();
+            }
+        }
+
+        return $files;
     }
 }

@@ -12,6 +12,8 @@ use Src\Game\Application\Command\CreateGame\CreateGameCommand;
 use Src\Game\Application\Command\CreateGame\CreateGameHandler;
 use Src\Game\Application\Command\DrawTile\DrawTileCommand;
 use Src\Game\Application\Command\DrawTile\DrawTileHandler;
+use Src\Game\Application\Command\ExpireIdleGames\ExpireIdleGamesCommand;
+use Src\Game\Application\Command\ExpireIdleGames\ExpireIdleGamesHandler;
 use Src\Game\Application\Command\PlayAgain\PlayAgainCommand;
 use Src\Game\Application\Command\PlayAgain\PlayAgainHandler;
 use Src\Game\Application\Command\RenameSeat\RenameSeatCommand;
@@ -26,13 +28,17 @@ use Src\Game\Application\Query\GetRoomConfigSpec\GetRoomConfigSpecHandler;
 use Src\Game\Application\Query\GetRoomConfigSpec\GetRoomConfigSpecQuery;
 use Src\Game\Application\Query\ResolveJoinCode\ResolveJoinCodeHandler;
 use Src\Game\Application\Query\ResolveJoinCode\ResolveJoinCodeQuery;
+use Src\Game\Application\Query\TallyGames\TallyGamesHandler;
+use Src\Game\Application\Query\TallyGames\TallyGamesQuery;
 use Src\Game\Application\Service\GameProjector;
 use Src\Game\Application\Service\GameRules;
 use Src\Game\Domain\Repository\GameRepository;
+use Src\Game\Domain\Repository\GameTallyReader;
 use Src\Game\Domain\Rules\RuleSetResolver;
 use Src\Game\Domain\Rules\Trident\TridentRuleSet;
 use Src\Game\Domain\Service\StatePublisher;
 use Src\Game\Infrastructure\Persistence\EloquentGameRepository;
+use Src\Game\Infrastructure\Persistence\EloquentGameTallyReader;
 use Src\Realtime\Application\Service\GameStatePublisher;
 use Src\Realtime\Domain\ChannelAccess;
 use Src\Realtime\Infrastructure\Persistence\RepositoryChannelAccess;
@@ -56,6 +62,7 @@ final class DomainServiceProvider extends ServiceProvider
         $this->app->bind(ChannelAccess::class, RepositoryChannelAccess::class);
         $this->app->bind(StatePublisher::class, GameStatePublisher::class);
         $this->app->bind(GameRepository::class, EloquentGameRepository::class);
+        $this->app->bind(GameTallyReader::class, EloquentGameTallyReader::class);
 
         // Every registered ruleset. A game is pinned to its own in
         // games.rule_set_id: this list says which ones exist, never which one a
@@ -104,6 +111,7 @@ final class DomainServiceProvider extends ServiceProvider
         $bus->register(StartGameCommand::class, StartGameHandler::class);
         $bus->register(DrawTileCommand::class, DrawTileHandler::class);
         $bus->register(PlayAgainCommand::class, PlayAgainHandler::class);
+        $bus->register(ExpireIdleGamesCommand::class, ExpireIdleGamesHandler::class);
     }
 
     private function registerQueries(LaravelQueryBus $bus): void
@@ -111,5 +119,6 @@ final class DomainServiceProvider extends ServiceProvider
         $bus->register(GetGameStateQuery::class, GetGameStateHandler::class);
         $bus->register(ResolveJoinCodeQuery::class, ResolveJoinCodeHandler::class);
         $bus->register(GetRoomConfigSpecQuery::class, GetRoomConfigSpecHandler::class);
+        $bus->register(TallyGamesQuery::class, TallyGamesHandler::class);
     }
 }

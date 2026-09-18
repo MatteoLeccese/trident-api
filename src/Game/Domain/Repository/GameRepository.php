@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Src\Game\Domain\Repository;
 
 use Closure;
+use DateTimeImmutable;
 use Src\Game\Domain\Model\Game;
 use Src\Game\Domain\ValueObjects\GameId;
 use Src\Game\Domain\ValueObjects\JoinCode;
@@ -35,6 +36,23 @@ interface GameRepository
     public function findForUpdate(GameId $id): ?Game;
 
     public function findByJoinCode(JoinCode $code): ?Game;
+
+    /**
+     * The games nobody has written to since `$cutoff` and that have not already
+     * ended, oldest first.
+     *
+     * It answers **identities and not aggregates**, and that is the point: the
+     * sweep that uses it re-reads each one under its own lock inside its own
+     * unit of work. A sweep that held every idle game at once would take the
+     * lock off a table that is mid-draw the moment somebody comes back to it.
+     *
+     * `$limit` bounds one sweep. A sweep that ran unbounded would, on the one
+     * night the scheduler had been down for a week, hold a transaction open
+     * across every game the product has ever served.
+     *
+     * @return list<GameId>
+     */
+    public function idleSince(DateTimeImmutable $cutoff, int $limit): array;
 
     /**
      * Runs one unit of work: everything inside it commits together or not at

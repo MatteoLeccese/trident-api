@@ -18,6 +18,7 @@ name: trident
 
 services:
   postgres:
+    restart: unless-stopped
     image: postgres:17-alpine
     environment:
       POSTGRES_DB: ${DB_DATABASE:-trident}
@@ -37,6 +38,7 @@ services:
 
   # Durable Redis: locks and queues. Never evicts.
   redis:
+    restart: unless-stopped
     image: redis:8-alpine
     command: redis-server --appendonly yes --maxmemory-policy noeviction
     volumes:
@@ -50,6 +52,7 @@ services:
 
   # Cache Redis: throttle counters and anything disposable. Evicts freely.
   redis_cache:
+    restart: unless-stopped
     image: redis:8-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
@@ -60,6 +63,7 @@ services:
     networks: [trident-net]
 
   api:
+    restart: unless-stopped
     build:
       context: .
       target: production
@@ -123,6 +127,7 @@ services:
     networks: [trident-net]
 
   reverb:
+    restart: unless-stopped
     build:
       context: .
       target: production
@@ -140,6 +145,37 @@ services:
       start_period: 20s
     depends_on:
       api: {condition: service_started}
+    networks: [trident-net]
+
+  # Runs the one scheduled thing in the product: the sweep that ends the games
+  # a table walked away from and tells their televisions.
+  #
+  # Same image, same environment, different role — and a role that must exist
+  # somewhere, because `withSchedule()` in bootstrap/app.php is otherwise a line
+  # nothing ever executes and every abandoned game stays on the big screen for
+  # ever showing somebody's turn.
+  #
+  # Exactly one replica. Two schedulers would run the sweep twice a tick, and
+  # the second would take the same locks for nothing.
+  scheduler:
+    restart: unless-stopped
+    build:
+      context: .
+      target: production
+    command: ["scheduler"]
+    environment: *api-env
+    # It serves no port, so it has nothing to poll: what says it is alive is that
+    # the process is still the one PID 1 started.
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'artisan schedule:work' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      redis_cache: {condition: service_healthy}
     networks: [trident-net]
 
   # The suite against the engine production uses. It does not start with

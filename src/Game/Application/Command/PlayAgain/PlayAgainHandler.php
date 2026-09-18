@@ -15,6 +15,7 @@ use Src\Game\Domain\Model\GameSnapshot;
 use Src\Game\Domain\Model\Seat;
 use Src\Game\Domain\Model\SeatRoster;
 use Src\Game\Domain\Repository\GameRepository;
+use Src\Game\Domain\Rules\FinishReason;
 use Src\Game\Domain\Rules\RoomConfig;
 use Src\Game\Domain\Service\StatePublisher;
 use Src\Game\Domain\ValueObjects\ControllerToken;
@@ -99,7 +100,7 @@ final class PlayAgainHandler
             // and bumps no version.
             $next->configureRoom($this->settingsWrittenBy($previous), $this->clock);
 
-            $previous->abandon($this->clock);
+            $previous->abandon($this->clock, FinishReason::REPLACED_BY_REMATCH);
 
             $this->games->save($next);
             $this->games->save($previous);

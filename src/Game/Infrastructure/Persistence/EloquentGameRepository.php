@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Src\Game\Infrastructure\Persistence;
 
 use Closure;
+use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -105,6 +106,32 @@ final class EloquentGameRepository implements GameRepository
         $row = GameModel::with('seats')->where('join_code', $code->value())->first();
 
         return $row === null ? null : $this->toAggregate($row);
+    }
+
+    /**
+     * The identities of the games nobody has written to since `$cutoff`.
+     *
+     * Only the id is read. Loading the aggregates here would deserialise a pool,
+     * a roster and a move log for every game the sweep is about to throw away,
+     * and the sweep re-reads each one under a lock anyway.
+     *
+     * Oldest first, so a bounded sweep that cannot reach the end of a backlog
+     * always takes the games that have been dead longest.
+     *
+     * @return list<GameId>
+     */
+    public function idleSince(DateTimeImmutable $cutoff, int $limit): array
+    {
+        /** @var list<string> $ids */
+        $ids = GameModel::query()
+            ->whereNotIn('status', GameStatus::terminal())
+            ->where('last_activity_at', '<', $cutoff)
+            ->orderBy('last_activity_at')
+            ->limit($limit)
+            ->pluck('id')
+            ->all();
+
+        return array_map(static fn (string $id): GameId => GameId::fromString($id), $ids);
     }
 
     /**

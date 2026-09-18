@@ -33,8 +33,9 @@ return [
     // abandoned. Always lower than idle_timeout_minutes, or the television
     // sends people home for a game the server has not expired.
     // Twin: the tv_idle_notice_minutes field of GameSnapshot, read by the watch
-    // screen in trident-web. The client keeps no copy of its own value. The
-    // snapshot field and its reader are built in phase 4.
+    // screen in trident-web. The client keeps no copy of its own value.
+    // The ordering against idle_timeout_minutes is enforced by
+    // tests/Unit/Shared/TridentConfigTest.php, not left to whoever edits this.
     'tv_idle_notice_minutes' => (int) env('TRIDENT_TV_IDLE_NOTICE_MINUTES', 30),
 
     // Crockford base32, without ambiguous characters: typeable with a TV remote.

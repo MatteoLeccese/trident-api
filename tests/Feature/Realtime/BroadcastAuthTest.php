@@ -9,6 +9,7 @@ use Illuminate\Testing\TestResponse;
 use Src\Game\Domain\Model\Game;
 use Src\Game\Domain\Model\SeatRoster;
 use Src\Game\Domain\Repository\GameRepository;
+use Src\Game\Domain\Rules\FinishReason;
 use Src\Game\Domain\ValueObjects\ControllerToken;
 use Src\Game\Domain\ValueObjects\GameId;
 use Src\Game\Domain\ValueObjects\JoinCode;
@@ -141,7 +142,7 @@ final class BroadcastAuthTest extends TestCase
     public function test_a_finished_game_is_refused(): void
     {
         // A television left on all night does not stay subscribed to a dead game.
-        $this->game->abandon(FrozenClock::at('2026-09-16 23:00:00'));
+        $this->game->abandon(FrozenClock::at('2026-09-16 23:00:00'), FinishReason::IDLE_TIMEOUT);
         $this->games->save($this->game);
 
         $this->authorise($this->channel())->assertForbidden();

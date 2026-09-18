@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Tests\Doubles;
 
 use Closure;
+use DateTimeImmutable;
 use Src\Game\Domain\Model\Game;
 use Src\Game\Domain\Repository\GameRepository;
 use Src\Game\Domain\ValueObjects\GameId;
+use Src\Game\Domain\ValueObjects\GameStatus;
 use Src\Game\Domain\ValueObjects\JoinCode;
 use Src\Shared\Domain\ValueObjects\RequestId;
 
@@ -48,6 +50,28 @@ final class InMemoryGameRepository implements GameRepository
     public function transactional(Closure $work): mixed
     {
         return $work();
+    }
+
+    /**
+     * The same answer the real one gives, computed over the array: not ended,
+     * last written to before the cutoff, oldest first.
+     *
+     * @return list<GameId>
+     */
+    public function idleSince(DateTimeImmutable $cutoff, int $limit): array
+    {
+        $idle = array_filter(
+            $this->games,
+            static fn (Game $game): bool => ! GameStatus::isTerminal($game->status())
+                && $game->lastActivityAt() < $cutoff,
+        );
+
+        usort($idle, static fn (Game $a, Game $b): int => $a->lastActivityAt() <=> $b->lastActivityAt());
+
+        return array_map(
+            static fn (Game $game): GameId => $game->id(),
+            array_slice(array_values($idle), 0, $limit),
+        );
     }
 
     public function findByJoinCode(JoinCode $code): ?Game

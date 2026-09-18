@@ -45,6 +45,20 @@ return [
             ],
             'client_options' => [
                 // Guzzle client options: https://docs.guzzlephp.org/en/stable/request-options.html
+                //
+                // A broadcast happens INSIDE the request that made the write, so
+                // a socket server that has stopped answering without refusing
+                // connections would otherwise hold the worker until Guzzle's own
+                // default gave up — which is no default at all. One sick Reverb
+                // would then stop the game rather than stop the big screen, and
+                // the phone that turned a tile over would hang on a write that
+                // had already committed.
+                //
+                // Short on purpose: this is a socket server on the same network,
+                // and if it cannot answer in two seconds the television has
+                // already lost the frame. The reconcile poll is what recovers it.
+                'connect_timeout' => (float) env('REVERB_CONNECT_TIMEOUT', 1.0),
+                'timeout' => (float) env('REVERB_TIMEOUT', 2.0),
             ],
         ],
 

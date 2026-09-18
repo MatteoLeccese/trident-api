@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Doubles;
 
 use Closure;
+use DateTimeImmutable;
 use Src\Game\Domain\Model\Game;
 use Src\Game\Domain\Repository\GameRepository;
 use Src\Game\Domain\ValueObjects\GameId;
@@ -39,6 +40,14 @@ final class TrailGameRepository implements GameRepository
         $this->trail[] = 'findForUpdate';
 
         return $this->inner->findForUpdate($id);
+    }
+
+    /**
+     * @return list<GameId>
+     */
+    public function idleSince(DateTimeImmutable $cutoff, int $limit): array
+    {
+        return $this->inner->idleSince($cutoff, $limit);
     }
 
     public function findByJoinCode(JoinCode $code): ?Game

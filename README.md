@@ -78,14 +78,29 @@ The API, the WebSocket server, the queue worker and the scheduler are all the
 same build. The role arrives as the container's command, which makes "it works in
 one container but not the other" impossible.
 
+The stack runs three of the four: `api`, `reverb` and `scheduler`. There is no
+`queue` container because nothing is queued — the state broadcast is
+`ShouldBroadcastNow` on purpose, so it goes out inside the write that caused it
+and a television never waits on a worker.
+
 ```bash
 docker compose run --rm api cli php artisan tinker
 docker compose exec api php artisan trident:smoke <GAME_ID>
+docker compose exec api php artisan trident:tally
+docker compose exec api php artisan trident:expire-games --minutes=1
 ```
 
 `trident:smoke` broadcasts a game's current state on demand. It exists because a
 television has no developer console: if the screen does not move after running
 it, the problem is the socket, not the state.
+
+`trident:tally` prints how many games began against how many reached their end,
+which for a party game is the only number that says whether it works.
+
+`trident:expire-games` ends the games a table walked away from and tells their
+televisions. The `scheduler` container runs it every five minutes; `--minutes`
+overrides the window for one run, which is what you want when you are standing in
+front of the stack and need a game gone now.
 
 ---
 

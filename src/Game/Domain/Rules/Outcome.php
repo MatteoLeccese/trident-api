@@ -135,8 +135,11 @@ final class Outcome implements JsonSerializable
     /** A game never finishes without a reason: the two are set together. */
     public function finishedBecause(string $reason): self
     {
-        if (! FinishReason::isValid($reason)) {
-            throw new InvalidArgumentException("'{$reason}' is not a finish reason.");
+        // A ruleset may only state a reason a rule can know. The framework's own
+        // terminal reasons — the table went home, the table asked for another
+        // game — are not facts any rule is in a position to claim.
+        if (! FinishReason::isFromRules($reason)) {
+            throw new InvalidArgumentException("'{$reason}' is not a finish reason a ruleset may state.");
         }
 
         if ($this->nextStage !== null) {

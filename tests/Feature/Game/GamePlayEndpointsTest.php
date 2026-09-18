@@ -9,6 +9,7 @@ use Illuminate\Testing\TestResponse;
 use Src\Game\Domain\Model\Game;
 use Src\Game\Domain\Model\SeatRoster;
 use Src\Game\Domain\Repository\GameRepository;
+use Src\Game\Domain\Rules\FinishReason;
 use Src\Game\Domain\Rules\Trident\TridentRuleSet;
 use Src\Game\Domain\ValueObjects\ControllerToken;
 use Src\Game\Domain\ValueObjects\GameId;
@@ -646,7 +647,7 @@ final class GamePlayEndpointsTest extends TestCase
         $game = $this->games->find(GameId::fromString($this->gameId));
 
         $this->assertNotNull($game);
-        $game->abandon(new SystemClock);
+        $game->abandon(new SystemClock, FinishReason::IDLE_TIMEOUT);
         $this->games->save($game);
 
         $this->write('POST', '/play-again')

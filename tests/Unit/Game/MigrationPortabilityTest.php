@@ -219,14 +219,15 @@ final class MigrationPortabilityTest extends TestCase
         }
     }
 
-    public function test_this_phase_adds_exactly_one_migration_to_the_games_table(): void
+    public function test_the_schema_is_exactly_four_migrations(): void
     {
-        // One migration carries the whole play state, and it is the only one this
-        // phase may add. An empty scan is a failure, so the count is asserted
-        // against the directory itself.
+        // The whole product is four migrations, and a fifth is a claim that the
+        // schema had to learn something new. It is allowed to happen; it is not
+        // allowed to happen quietly. An empty scan is a failure, so the count is
+        // asserted against the directory itself.
         $files = glob(__DIR__.'/../../../database/migrations/*.php') ?: [];
 
-        $this->assertCount(4, $files, 'The migrations directory has grown beyond this phase.');
+        $this->assertCount(4, $files, 'A migration was added. If the schema had to grow, say so here on purpose.');
         $this->assertSame(
             array_column(self::migrations(), 0),
             array_map('basename', $files),

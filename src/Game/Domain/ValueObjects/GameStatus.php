@@ -51,6 +51,19 @@ final class GameStatus
     }
 
     /** A terminal status closes the channel and releases the game's code. */
+    /**
+     * The statuses nothing moves out of.
+     *
+     * Exposed so a query can exclude them at the database rather than loading
+     * every game that has ever been played to ask each one in PHP.
+     *
+     * @return list<string>
+     */
+    public static function terminal(): array
+    {
+        return self::TERMINAL;
+    }
+
     public static function isTerminal(string $status): bool
     {
         return in_array($status, self::TERMINAL, true);

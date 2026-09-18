@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Src\Game\Domain\Model;
 
 use DateTimeImmutable;
+use InvalidArgumentException;
 use LogicException;
 use Src\Game\Domain\Exceptions\GameAlreadyFinishedException;
 use Src\Game\Domain\Exceptions\GameNotInLobbyException;
@@ -16,6 +17,7 @@ use Src\Game\Domain\Rules\ChoiceContext;
 use Src\Game\Domain\Rules\DrawContext;
 use Src\Game\Domain\Rules\Effect;
 use Src\Game\Domain\Rules\EffectKind;
+use Src\Game\Domain\Rules\FinishReason;
 use Src\Game\Domain\Rules\GameContext;
 use Src\Game\Domain\Rules\Outcome;
 use Src\Game\Domain\Rules\PendingChoice;
@@ -477,13 +479,29 @@ final class Game
         ]);
     }
 
-    public function abandon(Clock $clock): void
+    /**
+     * Ends a game without consulting any rule (TR-35), stating why.
+     *
+     * The reason is required and not defaulted: a rematch and an expiry both
+     * land on `abandoned`, and a caller that did not have to say which one it
+     * was would leave the two indistinguishable in the only row anybody will
+     * ever count.
+     *
+     * Abandoning a game that has already ended is a no-op and keeps the reason
+     * it ended with: the first terminal answer is the true one.
+     */
+    public function abandon(Clock $clock, string $reason): void
     {
+        if (! FinishReason::isValid($reason)) {
+            throw new InvalidArgumentException("'{$reason}' is not a finish reason.");
+        }
+
         if (GameStatus::isTerminal($this->status)) {
             return;
         }
 
         $this->status = GameStatus::ABANDONED;
+        $this->finishReason = $reason;
         $this->pendingChoice = null;
         $this->touch($clock);
         $this->record(MoveKind::GAME_ABANDONED);

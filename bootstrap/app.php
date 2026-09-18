@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -12,6 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Src\Game\Infrastructure\Console\ExpireGamesCommand;
+use Src\Game\Infrastructure\Console\TallyGamesCommand;
 use Src\Realtime\Infrastructure\Console\SmokeCommand;
 use Src\Realtime\Infrastructure\Http\Middleware\ResolveGameParticipant;
 use Src\Shared\Domain\Exceptions\DomainException;
@@ -81,7 +84,25 @@ return Application::configure(basePath: dirname(__DIR__))
             'middleware' => [ResolveGameParticipant::class, 'throttle:60,1'],
         ],
     )
-    ->withCommands([SmokeCommand::class])
+    ->withCommands([ExpireGamesCommand::class, TallyGamesCommand::class, SmokeCommand::class])
+
+    /*
+     * The one scheduled thing in the product.
+     *
+     * Every five minutes against a window measured in hours: the sweep is cheap
+     * when it finds nothing, and the resolution it needs is "the table left an
+     * hour ago", not "the table left ninety seconds ago". `withoutOverlapping`
+     * because a sweep that walks a backlog can outlive its own interval, and two
+     * of them racing would take the same lock twice for nothing.
+     *
+     * It runs in the `scheduler` container and nowhere else. Without that
+     * container this line executes never, which is why the two ship together.
+     */
+    ->withSchedule(function (Schedule $schedule): void {
+        $schedule->command('trident:expire-games')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+    })
     ->withMiddleware(function (Middleware $middleware): void {
         // Safety net: enforces the envelope on any response that did not go out
         // through ApiResponse.

@@ -11,6 +11,7 @@ use Src\Game\Application\Service\GameProjector;
 use Src\Game\Domain\Model\Game;
 use Src\Game\Domain\Model\SeatRoster;
 use Src\Game\Domain\Repository\GameRepository;
+use Src\Game\Domain\Rules\FinishReason;
 use Src\Game\Domain\ValueObjects\ControllerToken;
 use Src\Game\Domain\ValueObjects\GameId;
 use Src\Game\Domain\ValueObjects\JoinCode;
@@ -358,7 +359,7 @@ final class SnapshotDeliveryParityTest extends TestCase
         );
 
         $games->save($game);
-        $game->abandon(FrozenClock::at('2026-09-16 21:00:00'));
+        $game->abandon(FrozenClock::at('2026-09-16 21:00:00'), FinishReason::IDLE_TIMEOUT);
         $games->save($game);
 
         // What the publisher is handed at the moment of the write: the live

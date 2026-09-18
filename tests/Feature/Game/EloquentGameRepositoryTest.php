@@ -14,6 +14,7 @@ use Src\Game\Domain\Model\PlayState;
 use Src\Game\Domain\Model\Seat;
 use Src\Game\Domain\Model\SeatRoster;
 use Src\Game\Domain\Repository\GameRepository;
+use Src\Game\Domain\Rules\FinishReason;
 use Src\Game\Domain\Rules\PendingChoice;
 use Src\Game\Domain\Rules\RoomConfig;
 use Src\Game\Domain\Rules\RuleState;
@@ -370,7 +371,7 @@ final class EloquentGameRepositoryTest extends TestCase
         // Trap 5: `join_code` is a plain unique and NULLs do not collide, so a
         // finished game hands its code back to the pool.
         $game = $this->seededGame();
-        $game->abandon(FrozenClock::at('2026-09-16 21:00:00'));
+        $game->abandon(FrozenClock::at('2026-09-16 21:00:00'), FinishReason::IDLE_TIMEOUT);
 
         $this->repository()->save($game);
 
@@ -382,7 +383,7 @@ final class EloquentGameRepositoryTest extends TestCase
     public function test_a_released_code_can_be_taken_by_another_game(): void
     {
         $game = $this->seededGame();
-        $game->abandon(FrozenClock::at('2026-09-16 21:00:00'));
+        $game->abandon(FrozenClock::at('2026-09-16 21:00:00'), FinishReason::IDLE_TIMEOUT);
         $this->repository()->save($game);
 
         $next = Game::open(
@@ -451,7 +452,7 @@ final class EloquentGameRepositoryTest extends TestCase
         // Trap 6: reconstituting a released code goes through `JoinCode`, so the
         // placeholder has to be a valid Crockford base32 code.
         $game = $this->seededGame();
-        $game->abandon(FrozenClock::at('2026-09-16 21:00:00'));
+        $game->abandon(FrozenClock::at('2026-09-16 21:00:00'), FinishReason::IDLE_TIMEOUT);
         $this->repository()->save($game);
 
         $reloaded = $this->repository()->find($game->id());

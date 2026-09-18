@@ -21,6 +21,7 @@ use Src\Game\Domain\Model\Move;
 use Src\Game\Domain\Model\MoveKind;
 use Src\Game\Domain\Model\Seat;
 use Src\Game\Domain\Model\SeatRoster;
+use Src\Game\Domain\Rules\FinishReason;
 use Src\Game\Domain\Rules\RoomConfig;
 use Src\Game\Domain\Rules\RuleSet;
 use Src\Game\Domain\Rules\Trident\TridentRuleSet;
@@ -197,7 +198,7 @@ final class GameTest extends TestCase
     public function test_a_finished_game_cannot_be_touched(): void
     {
         $game = $this->open();
-        $game->abandon(FrozenClock::at('2026-09-15 21:00:00'));
+        $game->abandon(FrozenClock::at('2026-09-15 21:00:00'), FinishReason::IDLE_TIMEOUT);
 
         $this->expectException(GameAlreadyFinishedException::class);
 
@@ -581,7 +582,7 @@ final class GameTest extends TestCase
     public function test_a_finished_game_cannot_be_drawn_from(): void
     {
         $game = $this->started();
-        $game->abandon($this->clock('2026-09-15 21:00:00'));
+        $game->abandon($this->clock('2026-09-15 21:00:00'), FinishReason::IDLE_TIMEOUT);
 
         $this->refuses(
             fn () => $game->drawTile(PoolPosition::first(), new TridentRuleSet, $this->clock()),
@@ -737,7 +738,7 @@ final class GameTest extends TestCase
         $game->start($rules, $this->clock());
         $game->drawTile(PoolPosition::first(), $rules, $this->clock());
         $game->answerChoice(HostileRuleSet::OPTION_BETA, $rules, $this->clock());
-        $game->abandon($this->clock());
+        $game->abandon($this->clock(), FinishReason::IDLE_TIMEOUT);
 
         $kinds = array_map(static fn (Move $move): string => $move->kind(), $game->pullMoves());
 

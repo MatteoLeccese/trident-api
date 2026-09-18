@@ -31,8 +31,12 @@ Consecuencias reales, todas confirmadas en la auditoría:
 - `ReplayMatchesStateTest` asegura que **reproducir los movimientos de una partida reproduce su fila
   persistida**, así que la divergencia no puede pasar desapercibida como pasó con BD-contra-caché.
 - **La expiración es una columna, no un TTL de clave:** `last_activity_at` **deslizante**, refrescado
-  en cada escritura, con `expires_at` derivado. Un comando programado (`trident:expire-games`) la
-  gobierna y emite un snapshot final. Jamás un reloj absoluto.
+  en cada escritura. No hay columna `expires_at` y no hace falta: el corte se calcula al barrer, así
+  que cambiar `idle_timeout_minutes` no deja atrás un montón de filas con un vencimiento viejo
+  grabado. `trident:expire-games` la gobierna, corre cada cinco minutos en el contenedor `scheduler`,
+  cierra cada partida bajo su propio lock con `FinishReason::IDLE_TIMEOUT` y **emite un snapshot
+  final** — sin él, un televisor con el socket vivo se queda anunciando el turno de alguien toda la
+  noche. Jamás un reloj absoluto.
 - `GameStateChanged` recibe un `GameSnapshot` **como argumento de constructor** y es
   **estructuralmente incapaz de leer almacenamiento**. El evento viejo leía la caché en su propio
   constructor, que es como acabó emitiendo `[]`.
