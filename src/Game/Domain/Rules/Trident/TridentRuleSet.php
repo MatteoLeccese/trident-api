@@ -40,9 +40,12 @@ use Src\Game\Domain\ValueObjects\TileDeck;
  * `Effect::challenge()` carries a target, and it lives in this class alone: no
  * column, no route, no projection and no screen knows what a trident is.
  *
- * Stateless: it keeps no properties and writes nothing to `RuleState` beyond the
- * version the framework stamps (TR-19), so every decision is taken from the
- * context it is handed and from nothing else (TR-56).
+ * **It holds nothing a draw can change.** Its one property is the deployment's
+ * seven default phrases, which are read and never written, and it writes nothing
+ * to `RuleState` beyond the version the framework stamps (TR-19). Every decision
+ * is taken from the context it is handed and from nothing else (TR-56): two
+ * instances built the same way answer the same draw identically, and no game
+ * leaves a trace in the object that the next one could read.
  */
 final class TridentRuleSet implements RuleSet
 {
@@ -85,6 +88,27 @@ final class TridentRuleSet implements RuleSet
 
     /** A challenge is painted at 96px on a television: three lines of it (TR-51). */
     public const CHALLENGE_MAX_LENGTH = 80;
+
+    /**
+     * The phrases a table finds already in its seven boxes.
+     *
+     * Injected rather than read, because the domain may not reach a
+     * configuration file and because this class must keep nothing a game can
+     * change. It is written once, at construction, and only ever read.
+     */
+    private readonly ChallengeTexts $challenges;
+
+    /**
+     * The shipped phrases unless a deployment set its own.
+     *
+     * The argument is optional so that every caller who does not care about the
+     * texts — which is every test of a rule, and the rule is what they are
+     * testing — constructs this the way it always did.
+     */
+    public function __construct(?ChallengeTexts $challenges = null)
+    {
+        $this->challenges = $challenges ?? ChallengeTexts::shipped();
+    }
 
     public function id(): string
     {
@@ -162,7 +186,7 @@ final class TridentRuleSet implements RuleSet
             $fields[] = RoomConfigField::text(
                 self::challengeKey($face),
                 "Face {$face}",
-                self::defaultChallenge($face),
+                $this->challenges->of($face),
                 self::CHALLENGE_MAX_LENGTH,
             );
         }
@@ -318,11 +342,6 @@ final class TridentRuleSet implements RuleSet
      * author delivers the seven texts (TR-51, TR-53). It is a marker of ours and
      * never invented content that could be mistaken for the table's own.
      */
-    private static function defaultChallenge(int $face): string
-    {
-        return "Placeholder challenge for face {$face}: the table writes this one.";
-    }
-
     private static function tridentTile(): Tile
     {
         return Tile::of(self::TRIDENT_FACE, self::TRIDENT_FACE);

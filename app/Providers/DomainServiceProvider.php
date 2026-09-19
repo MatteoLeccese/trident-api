@@ -35,6 +35,7 @@ use Src\Game\Application\Service\GameRules;
 use Src\Game\Domain\Repository\GameRepository;
 use Src\Game\Domain\Repository\GameTallyReader;
 use Src\Game\Domain\Rules\RuleSetResolver;
+use Src\Game\Domain\Rules\Trident\ChallengeTexts;
 use Src\Game\Domain\Rules\Trident\TridentRuleSet;
 use Src\Game\Domain\Service\StatePublisher;
 use Src\Game\Infrastructure\Persistence\EloquentGameRepository;
@@ -64,11 +65,17 @@ final class DomainServiceProvider extends ServiceProvider
         $this->app->bind(GameRepository::class, EloquentGameRepository::class);
         $this->app->bind(GameTallyReader::class, EloquentGameTallyReader::class);
 
-        // Every registered ruleset. A game is pinned to its own in
-        // games.rule_set_id: this list says which ones exist, never which one a
-        // game already in flight plays by.
+        /*
+          * Every registered ruleset. A game is pinned to its own in
+          * games.rule_set_id: this list says which ones exist, never which one a
+          * game already in flight plays by.
+          *
+          * The one place `trident.challenges` is read. The domain may not reach a
+          * configuration file, so the deployment's seven phrases are handed over
+          * here, exactly as the projector is handed its notice window.
+          */
         $this->app->singleton(RuleSetResolver::class, static fn (): RuleSetResolver => new RuleSetResolver([
-            new TridentRuleSet,
+            new TridentRuleSet(ChallengeTexts::fromOverrides((array) config('trident.challenges', []))),
         ]));
 
         // The one place `tv_idle_notice_minutes` is read: it is a per-deployment

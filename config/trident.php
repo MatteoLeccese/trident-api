@@ -38,6 +38,28 @@ return [
     // tests/Unit/Shared/TridentConfigTest.php, not left to whoever edits this.
     'tv_idle_notice_minutes' => (int) env('TRIDENT_TV_IDLE_NOTICE_MINUTES', 30),
 
+    /*
+     * The seven phrases a table finds already in its boxes, one per tile face.
+     *
+     * A per-deployment value and not a rule: when a challenge fires is decided by
+     * the ruleset, what it says is a setting, and the table may rewrite every one
+     * of them without changing a single draw. These are only the defaults, and a
+     * game that has started keeps the ones it started with.
+     *
+     * An unset or blank variable is not an override: the phrase this build ships
+     * with stands. Anything else has to fit a television — at most 80 characters,
+     * on one line — and is refused at boot rather than in front of a room.
+     */
+    'challenges' => [
+        0 => env('TRIDENT_CHALLENGE_FACE_0'),
+        1 => env('TRIDENT_CHALLENGE_FACE_1'),
+        2 => env('TRIDENT_CHALLENGE_FACE_2'),
+        3 => env('TRIDENT_CHALLENGE_FACE_3'),
+        4 => env('TRIDENT_CHALLENGE_FACE_4'),
+        5 => env('TRIDENT_CHALLENGE_FACE_5'),
+        6 => env('TRIDENT_CHALLENGE_FACE_6'),
+    ],
+
     // Crockford base32, without ambiguous characters: typeable with a TV remote.
     'join_code_length' => 6,
 

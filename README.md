@@ -14,34 +14,93 @@ explains why there are two credentials and why the spectator one can never write
 
 ## Running it
 
-This repository owns the shared Docker network and the data services. Start it
-before the web app.
+**You need Docker, and nothing else.** Not PHP, not its extensions, not
+PostgreSQL. Anything the application needs belongs in the image.
+
+This repository owns the shared Docker network and the data services, so it
+starts first.
 
 ```bash
-cp .env.example.local .env       # first time only
-php artisan key:generate         # first time only
-
+cp .env.example .env
 docker compose up -d --build
 ```
 
-That brings up six things: PostgreSQL 17, two Redis instances (durable and
-cache), the API on FrankenPHP/Octane, and Reverb. Migrations run automatically on
-start.
+That is the whole first-time setup. The template is filled in and works as it is:
+there is no key to generate, no password to invent and no migration to run by
+hand — migrations run on start.
 
 ```bash
 curl -s localhost:8000/api/v1/health
 # {"status":200,"message":"OK","error":null,"data":{"status":"ok"}}
 ```
 
-Then start the web app — see [`../trident-web/README.md`](../trident-web/README.md).
+Then the web app, in the other repository:
 
-**This project runs in Docker.** Nothing needs installing on your machine beyond
-Docker itself — not PHP, not its extensions, not PostgreSQL. Anything the
-application needs belongs in the image.
+```bash
+cd ../trident-web
+cp .env.example .env
+docker compose up -d --build
+```
+
+Open `http://localhost:3000` on the phone and `http://localhost:3000/tv` on the
+television. **Use a separate browser profile, another browser or a private window
+for the television** — sharing a cookie jar gives it the controller credential,
+and then it is not a television.
+
+### Playing on your own network
+
+Two values change, both in `trident-api/.env`, and then rebuild:
+
+```bash
+FRONTEND_URL=http://192.168.1.10:3000
+REVERB_ALLOWED_ORIGINS=localhost,127.0.0.1,192.168.1.*
+```
+
+The browser works out where the socket is from the page it loaded, so nothing on
+the web side needs the address — that is why the image survives your network
+changing.
+
+### The seven challenges
+
+The game ships with seven placeholder phrases, one per tile face, and they say so
+on screen. Write your own in `trident-api/.env` and restart:
+
+```bash
+TRIDENT_CHALLENGE_FACE_0=Everyone drinks with their left hand until the next three.
+```
+
+They are only the defaults a table finds in its boxes; the room can rewrite any
+of them in the lobby, and a game that has started keeps the ones it started with.
+At most 80 characters each, on one line: a phrase that does not fit is refused
+when the container starts rather than in front of a room.
+
+### What is running
+
+| Service | What it is |
+|---|---|
+| `postgres` | PostgreSQL 17, the only source of truth |
+| `redis` | Durable: locks. Never evicts |
+| `redis_cache` | Throttle counters and anything disposable |
+| `api` | The API on FrankenPHP/Octane |
+| `reverb` | The WebSocket server the televisions hold open |
+| `scheduler` | Runs `trident:expire-games` every five minutes |
+| `pg-backup` | Dumps the database every six hours — see [`documentation/deployment/backup-and-restore.md`](documentation/deployment/backup-and-restore.md) |
 
 ---
 
-## Tests
+## Checks
+
+Everything that has to be green, in one command:
+
+```bash
+bin/check           # the suite on SQLite, plus code style
+bin/check --full    # the same, and then the suite against PostgreSQL
+```
+
+There is no CI and there will not be one. These run locally before a session
+closes, and they bind.
+
+### Running parts of it
 
 The suite runs inside the image, never on the host, and on either engine.
 

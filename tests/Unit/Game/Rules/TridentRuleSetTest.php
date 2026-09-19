@@ -813,9 +813,23 @@ final class TridentRuleSetTest extends TestCase
 
     public function test_tr_56_a_draw_is_decided_from_its_own_context_alone(): void
     {
-        // The ruleset holds no state of its own, so a second instance that has
-        // never seen a game answers the same draw identically.
-        $this->assertSame([], (new ReflectionClass(TridentRuleSet::class))->getProperties());
+        /*
+         * The ruleset holds nothing a game can change, so a second instance that
+         * has never seen one answers the same draw identically.
+         *
+         * Asserted as "every property is readonly" and not as "there are no
+         * properties": the deployment's seven default phrases live on this
+         * object, because the domain may not read a configuration file. They are
+         * written once at construction and only ever read, which is the property
+         * that mattered — a rule that could remember a previous game is a rule
+         * that could decide by one (TR-55, TR-56).
+         */
+        foreach ((new ReflectionClass(TridentRuleSet::class))->getProperties() as $property) {
+            $this->assertTrue(
+                $property->isReadOnly(),
+                "TridentRuleSet::\${$property->getName()} is writable, so a game could leave a trace in it.",
+            );
+        }
 
         $context = $this->drawContextFor(self::MAIN, Tile::fromString('36'), SeatNumber::fromInt(4), $this->roster(5, 2));
 

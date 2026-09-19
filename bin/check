@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+# Everything that has to be green before a session ends, in one command.
+#
+#     bin/check          the suite on SQLite, plus Pint
+#     bin/check --full   the same, and then the suite against PostgreSQL
+#
+# It runs in the image and never on this machine: the point of the container is
+# that the version of PHP, the extensions and the SQLite build are the same ones
+# everywhere, and a check that passed only on somebody's laptop has checked
+# nothing.
+set -eu
+
+cd "$(dirname "$0")/.."
+
+FULL=""
+for argument in "$@"; do
+  case "$argument" in
+    --full) FULL="yes" ;;
+    *) echo "unknown option: $argument" >&2; exit 2 ;;
+  esac
+done
+
+say () { printf '\n\033[1m→ %s\033[0m\n' "$1"; }
+
+say "building the test image"
+docker build --quiet --target test -t trident-api:test .
+
+say "the suite, on SQLite"
+docker run --rm trident-api:test
+
+say "code style"
+docker run --rm trident-api:test cli vendor/bin/pint --test
+
+if [ -n "$FULL" ]; then
+  # --build is not optional: compose keeps its own image for this service, so
+  # without it the run reports on source that has already changed.
+  say "the suite, against PostgreSQL"
+  docker compose run --rm --build test
+fi
+
+printf '\n\033[32m✓ green\033[0m\n'

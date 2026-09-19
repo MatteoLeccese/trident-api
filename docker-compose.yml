@@ -16,9 +16,24 @@
 
 name: trident
 
+# Every long-lived service rotates its logs through this.
+#
+# Docker's default json-file driver has NO limit at all: a container that logs
+# steadily fills the disk of the machine the party is happening on, and the first
+# anybody knows about it is the stack dying mid-game. Three files of ten
+# megabytes is more than enough to read back an evening.
+x-logging: &rotated-logs
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     restart: unless-stopped
+    logging: *rotated-logs
+    # The only thing here that must never be killed for memory: it is the source of truth.
+    mem_limit: 512m
     image: postgres:17-alpine
     environment:
       POSTGRES_DB: ${DB_DATABASE:-trident}
@@ -39,6 +54,9 @@ services:
   # Durable Redis: locks and queues. Never evicts.
   redis:
     restart: unless-stopped
+    logging: *rotated-logs
+    # Its own maxmemory is 0 (noeviction): this is the outer bound, not the policy.
+    mem_limit: 128m
     image: redis:8-alpine
     command: redis-server --appendonly yes --maxmemory-policy noeviction
     volumes:
@@ -53,6 +71,9 @@ services:
   # Cache Redis: throttle counters and anything disposable. Evicts freely.
   redis_cache:
     restart: unless-stopped
+    logging: *rotated-logs
+    # Its own maxmemory is 256m and it evicts; this leaves room for overhead.
+    mem_limit: 320m
     image: redis:8-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
@@ -64,6 +85,9 @@ services:
 
   api:
     restart: unless-stopped
+    logging: *rotated-logs
+    # Octane holds a fixed worker pool, so this is the ceiling for all of them.
+    mem_limit: 768m
     build:
       context: .
       target: production
@@ -128,6 +152,9 @@ services:
 
   reverb:
     restart: unless-stopped
+    logging: *rotated-logs
+    # One connection per screen, and a table is fifteen screens.
+    mem_limit: 256m
     build:
       context: .
       target: production
@@ -147,6 +174,36 @@ services:
       api: {condition: service_started}
     networks: [trident-net]
 
+  # Takes a dump of the game database on an interval and keeps the last few.
+  #
+  # The volume is separate from the data volume on purpose: a backup that lives
+  # inside the thing it is backing up is not a backup. Copy it off this machine
+  # if the evening is worth keeping.
+  #
+  # The restore is rehearsed and written down in
+  # documentation/deployment/backup-and-restore.md. A backup nobody has ever
+  # restored is a file, not a backup.
+  pg-backup:
+    restart: unless-stopped
+    logging: *rotated-logs
+    # It runs pg_dump and sleeps.
+    mem_limit: 128m
+    image: postgres:17-alpine
+    environment:
+      PGHOST: postgres
+      PGUSER: ${DB_USERNAME:-trident}
+      PGPASSWORD: ${DB_PASSWORD:-trident}
+      PGDATABASE: ${DB_DATABASE:-trident}
+      TRIDENT_BACKUP_EVERY_SECONDS: ${TRIDENT_BACKUP_EVERY_SECONDS:-21600}
+      TRIDENT_BACKUP_KEEP: ${TRIDENT_BACKUP_KEEP:-8}
+    volumes:
+      - postgres-backups:/backups
+      - ./docker/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [trident-net]
+
   # Runs the one scheduled thing in the product: the sweep that ends the games
   # a table walked away from and tells their televisions.
   #
@@ -159,6 +216,9 @@ services:
   # the second would take the same locks for nothing.
   scheduler:
     restart: unless-stopped
+    logging: *rotated-logs
+    # One sweep every five minutes, bounded to 200 games.
+    mem_limit: 192m
     build:
       context: .
       target: production
@@ -214,6 +274,7 @@ services:
     networks: [trident-net]
 
 volumes:
+  postgres-backups:
   postgres-data:
   redis-data:
 

@@ -9,10 +9,9 @@
 /vendor
 .env
 .env.*
-!.env.example.production
-!.env.example.staging
-!.env.example.local
-!.env.example.dev
+# One template, not one per environment: this product runs one way, and four
+# files that had to agree with each other is a thing that stops agreeing.
+!.env.example
 .phpactor.json
 .phpunit.result.cache
 Homestead.json

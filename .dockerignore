@@ -8,7 +8,10 @@ storage/framework/sessions/*
 storage/framework/views/*
 .env
 .env.*
-!.env.example.*
+# The template travels with the image: EnvironmentTemplateTest holds it against
+# what config/ actually reads, and the suite runs in the image. It carries no
+# secret — that is the point of it being the template.
+!.env.example
 .phpunit.cache
 .phpunit.result.cache
 # The conventions travel with the image: SpecificationCoverageTest reads
